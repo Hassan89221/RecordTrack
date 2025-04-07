@@ -3,12 +3,13 @@
     "name": "RecordTrack",
     "slug": "RecordTrack",
     "version": "1.0.0",
+    "scheme": "RecordTrack",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/pen.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/paperpen.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -17,12 +18,24 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/pen.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.hassan36226.RecordTrack"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/pen.png"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "91c8ae11-240c-46a3-a39a-25111663cb8c"
+      }
     }
   }
 }
