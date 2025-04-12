@@ -44,7 +44,9 @@ A mobile app built with **React Native (Expo)** for shopkeepers to record and ma
 
 ---
 
-📂 Folder Structure
+
+## 📂 Folder Structure
+
 RecordKeeperApp/ ├── app/ │ ├── index.tsx # Landing screen │ ├── _layout.tsx # Stack navigation │ ├── shops/ # Shops screen │ ├── products/ # Product management │ ├── product-details/ # Sales detail entry and view │ └── payments/ # Payments screen ├── firebase.js # Firebase config & initialization ├── assets/ # App images and icons └── README.md
 
 🧪 Setup Instructions
