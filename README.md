@@ -56,6 +56,7 @@ RecordKeeperApp/ ├── app/ │ ├── index.tsx # Landing screen │ ├
    npm install
 3. **Run the app:**
    npx expo start
+
 ✨ Future Improvements
 
 -> Export sales data as CSV
