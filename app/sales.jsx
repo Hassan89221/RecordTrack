@@ -37,6 +37,7 @@ export default function sales() {
   const [quantity, setQuantity] = useState("");
   const [salesData, setSalesData] = useState([]);
   const [editId, setEditId] = useState(null);
+  const [oldTotal, setOldTotal] = useState(0);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEditingRate, setIsEditingRate] = useState(false);
@@ -121,6 +122,11 @@ export default function sales() {
     };
 
     try {
+      const shopRef = doc(db, "shops", shopId);
+      const shopSnapshot = await getDoc(shopRef);
+      const currentEarnings = shopSnapshot.exists()
+        ? shopSnapshot.data().totalEarnings || 0
+        : 0;
       if (editId) {
         const saleRef = doc(
           db,
@@ -131,7 +137,18 @@ export default function sales() {
           "sales",
           editId
         );
+        const oldSaleSnapshot = await getDoc(saleRef);
+        const oldSale = oldSaleSnapshot.data();
+        const oldTotal = parseFloat(oldSale.total);
+
+        // Calculate the difference
+        const difference = saleAmount - oldTotal;
+
         await updateDoc(saleRef, saleData);
+        // Update totalEarnings with difference
+        await updateDoc(shopRef, {
+          totalEarnings: currentEarnings + difference,
+        });
         setEditId(null);
       } else {
         // Add new sale
@@ -204,6 +221,7 @@ export default function sales() {
     setRate(item.rate);
     setQuantity(item.quantity);
     setEditId(item.id);
+    setOldTotal(item.totalEarnings);
     setModalVisible(true);
   };
 
