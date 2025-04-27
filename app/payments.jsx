@@ -154,6 +154,11 @@ export default function payments() {
 
   const handleEditPayment = async () => {
     if (!editingPayment) return;
+    if (!receivedAmount || !expenses) {
+      alert("Please fill in both Received Amount and Expenses.");
+      return;
+    }
+
     const updatedAmount = parseFloat(receivedAmount);
     const updatedExpense = parseFloat(expenses);
 
