@@ -127,7 +127,7 @@ export default function payments() {
   const handleDeletePayment = async (payment) => {
     Alert.alert(
       "Delete Payment",
-      "Are you sure you want to delete this payment?",
+      "What would you like to do with this payment?",
       [
         {
           text: "Cancel",
@@ -144,6 +144,32 @@ export default function payments() {
               );
             } catch (error) {
               console.error("Error deleting payment:", error);
+            }
+          },
+        },
+        {
+          text: "Add & Delete",
+          style: "default",
+          onPress: async () => {
+            try {
+              const amountToAddBack =
+                (payment.amountReceived || 0) + (payment.expensesNum || 0);
+
+              const shopRef = doc(db, "shops", shopId);
+              const shopSnap = await getDoc(shopRef);
+              if (shopSnap.exists()) {
+                const currentEarnings = shopSnap.data().totalEarnings || 0;
+                await updateDoc(shopRef, {
+                  totalEarnings: currentEarnings + amountToAddBack,
+                });
+              }
+
+              await deleteDoc(doc(db, "shops", shopId, "payments", payment.id));
+              setPayments((prevPayments) =>
+                prevPayments.filter((p) => p.id !== payment.id)
+              );
+            } catch (error) {
+              console.error("Error adding back and deleting payment:", error);
             }
           },
         },
@@ -183,19 +209,18 @@ export default function payments() {
   };
 
   useEffect(() => {
-    loadMoreData();
-  }, []);
+    const nextData = payments.slice(0, page * ITEMS_PER_PAGE);
+    setDisplayedData(nextData);
+  }, [payments, page]);
+
   const loadMoreData = () => {
-    if (loadingMore) return;
+    if (loadingMore || displayedData.length >= payments.length) return;
 
     setLoadingMore(true);
-
     setTimeout(() => {
-      const nextData = payments.slice(0, page * ITEMS_PER_PAGE);
-      setDisplayedData(nextData);
-      setPage(page + 1);
+      setPage((prevPage) => prevPage + 1); // Safe update
       setLoadingMore(false);
-    }, 500); // Simulating a delay for smooth loading effect
+    }, 300); // Optional delay for smoother UX
   };
 
   return (
@@ -253,7 +278,7 @@ export default function payments() {
           </View>
         )}
         onEndReached={loadMoreData}
-        onEndReachedThreshold={0.1} // Load more when 10% from the bottom
+        onEndReachedThreshold={0.5} // Load more when 10% from the bottom
         ListFooterComponent={
           loadingMore ? (
             <ActivityIndicator

@@ -185,11 +185,18 @@ export default function sales() {
     }
   };
 
-  const deleteSale = async (id) => {
+  const handleDeleteSale = async (id) => {
     if (!shopId || !productId) return;
+
+    const sale = salesData.find((s) => s.id === id);
+    if (!sale) {
+      console.error("Sale not found for ID:", id);
+      return;
+    }
+
     Alert.alert(
       "Delete Sale",
-      "Are you sure you want to delete this sale?",
+      "What would you like to do with this sale?",
       [
         {
           text: "Cancel",
@@ -203,11 +210,34 @@ export default function sales() {
               await deleteDoc(
                 doc(db, "shops", shopId, "products", productId, "sales", id)
               );
-              setSalesData((prevData) =>
-                prevData.filter((item) => item.id !== id)
-              );
+              setSalesData((prev) => prev.filter((s) => s.id !== id));
             } catch (error) {
               console.error("Error deleting sale:", error);
+            }
+          },
+        },
+        {
+          text: "Remove & Delete",
+          style: "default",
+          onPress: async () => {
+            try {
+              const saleTotal = (sale.rate || 0) * (sale.quantity || 0);
+              const shopRef = doc(db, "shops", shopId);
+              const shopSnap = await getDoc(shopRef);
+              if (shopSnap.exists()) {
+                const currentEarnings = shopSnap.data().totalEarnings || 0;
+                await updateDoc(shopRef, {
+                  totalEarnings: currentEarnings - saleTotal,
+                });
+              }
+
+              await deleteDoc(
+                doc(db, "shops", shopId, "products", productId, "sales", id)
+              );
+              setSalesData((prev) => prev.filter((s) => s.id !== id));
+              fetchSales();
+            } catch (error) {
+              console.error("Error removing & deleting sale:", error);
             }
           },
         },
@@ -233,19 +263,18 @@ export default function sales() {
   };
 
   useEffect(() => {
-    loadMoreData();
-  }, []);
+    const nextData = salesData.slice(0, page * ITEMS_PER_PAGE);
+    setDisplayedData(nextData);
+  }, [salesData, page]);
+
   const loadMoreData = () => {
-    if (loadingMore) return;
+    if (loadingMore || displayedData.length >= salesData.length) return;
 
     setLoadingMore(true);
-
     setTimeout(() => {
-      const nextData = salesData.slice(0, page * ITEMS_PER_PAGE);
-      setDisplayedData(nextData);
-      setPage(page + 1);
+      setPage((prevPage) => prevPage + 1); // Safe update
       setLoadingMore(false);
-    }, 500); // Simulating a delay for smooth loading effect
+    }, 300); // Optional delay for smoother UX
   };
 
   return (
@@ -310,7 +339,7 @@ export default function sales() {
                 <TouchableOpacity onPress={() => editSale(item)}>
                   <AntDesign name="edit" size={20} color="black" />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => deleteSale(item.id)}>
+                <TouchableOpacity onPress={() => handleDeleteSale(item.id)}>
                   <AntDesign
                     name="delete"
                     size={20}
@@ -323,7 +352,7 @@ export default function sales() {
           </View>
         )}
         onEndReached={loadMoreData}
-        onEndReachedThreshold={0.1} // Load more when 10% from the bottom
+        onEndReachedThreshold={0.5} // Load more when 10% from the bottom
         ListFooterComponent={
           loadingMore ? (
             <ActivityIndicator
