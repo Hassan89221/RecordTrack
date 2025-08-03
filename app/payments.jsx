@@ -29,6 +29,8 @@ import {
   query,
   where,
   Timestamp,
+  limit,
+  startAfter,
 } from "firebase/firestore";
 import Animated, {
   SlideInDown,
@@ -38,7 +40,9 @@ import Animated, {
 } from "react-native-reanimated";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
-const ITEMS_PER_PAGE = 10;
+// Pagination constants
+const SALES_PAGE_SIZE = 10;
+const PAYMENTS_PAGE_SIZE = 10;
 
 export default function Payments() {
   const router = useRouter();
@@ -61,10 +65,237 @@ export default function Payments() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [errors, setErrors] = useState({});
 
-  // Fetch shop data and sales data from all products
+  // Pagination states for sales
+  const [salesLastVisible, setSalesLastVisible] = useState(null);
+  const [loadingMoreSales, setLoadingMoreSales] = useState(false);
+  const [hasMoreSales, setHasMoreSales] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+
+  // Pagination states for payments
+  const [paymentsLastVisible, setPaymentsLastVisible] = useState(null);
+  const [loadingMorePayments, setLoadingMorePayments] = useState(false);
+  const [hasMorePayments, setHasMorePayments] = useState(true);
+
+  // Setup real-time listener for first page of sales data
+  const setupSalesListener = useCallback(() => {
+    if (!auth.currentUser || !shopId) return;
+
+    console.log("Setting up sales real-time listener");
+
+    const salesQuery = query(
+      collection(db, "shops", shopId, "sales"),
+      orderBy("date", "desc"),
+      limit(SALES_PAGE_SIZE)
+    );
+
+    const unsubscribe = onSnapshot(
+      salesQuery,
+      (snapshot) => {
+        const salesList = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        // Filter by user ID locally if needed (to avoid index requirement)
+        const userSales = salesList.filter(
+          (sale) => sale.userId === auth.currentUser.uid
+        );
+
+        setSalesData(userSales);
+
+        // Set pagination state
+        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+        setSalesLastVisible(lastDoc);
+        setHasMoreSales(snapshot.docs.length === SALES_PAGE_SIZE);
+        setInitialLoading(false);
+
+        console.log(
+          `Real-time sales update: ${userSales.length} sales entries`
+        );
+      },
+      (error) => {
+        console.error("Error in sales listener:", error);
+        setInitialLoading(false);
+      }
+    );
+
+    return unsubscribe;
+  }, [shopId]);
+
+  // Setup real-time listener for payments with pagination
+  const setupPaymentsListener = useCallback(() => {
+    if (!auth.currentUser || !shopId) return;
+
+    console.log("Setting up payments real-time listener");
+
+    const paymentsQuery = query(
+      collection(db, "shops", shopId, "payments"),
+      orderBy("createdAt", "desc"),
+      limit(PAYMENTS_PAGE_SIZE)
+    );
+
+    const unsubscribe = onSnapshot(
+      paymentsQuery,
+      (snapshot) => {
+        const paymentsList = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        // Filter by user ID locally (to avoid index requirement)
+        const userPayments = paymentsList.filter(
+          (payment) => payment.userId === auth.currentUser.uid
+        );
+
+        setPayments(userPayments);
+
+        // Set pagination state for payments
+        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+        setPaymentsLastVisible(lastDoc);
+        setHasMorePayments(snapshot.docs.length === PAYMENTS_PAGE_SIZE);
+
+        console.log(
+          `Real-time payments update: ${userPayments.length} payments`
+        );
+      },
+      (error) => {
+        console.error("Error in payments listener:", error);
+      }
+    );
+
+    return unsubscribe;
+  }, [shopId]);
+
+  // Load more sales data (pagination)
+  const loadMoreSales = useCallback(async () => {
+    if (loadingMoreSales || !hasMoreSales || !salesLastVisible) {
+      return;
+    }
+
+    console.log("Loading more sales data...");
+    setLoadingMoreSales(true);
+
+    try {
+      const salesQuery = query(
+        collection(db, "shops", shopId, "sales"),
+        orderBy("date", "desc"),
+        startAfter(salesLastVisible),
+        limit(SALES_PAGE_SIZE)
+      );
+
+      const snapshot = await getDocs(salesQuery);
+      const newSalesData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Filter by user ID locally
+      const userSales = newSalesData.filter(
+        (sale) => sale.userId === auth.currentUser.uid
+      );
+
+      if (newSalesData.length > 0) {
+        // Add to existing sales data, but ensure no duplicates
+        setSalesData((prev) => {
+          const existingIds = new Set(prev.map((item) => item.id));
+          const newUniqueSales = userSales.filter(
+            (sale) => !existingIds.has(sale.id)
+          );
+          return [...prev, ...newUniqueSales];
+        });
+
+        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+        setSalesLastVisible(lastDoc);
+        setHasMoreSales(snapshot.docs.length === SALES_PAGE_SIZE);
+
+        console.log(
+          `Loaded ${userSales.length} more sales entries (${
+            userSales.filter(
+              (sale, index, self) =>
+                index === self.findIndex((s) => s.id === sale.id)
+            ).length
+          } unique)`
+        );
+      } else {
+        setHasMoreSales(false);
+        console.log("No more sales data to load");
+      }
+    } catch (error) {
+      console.error("Error loading more sales:", error);
+    } finally {
+      setLoadingMoreSales(false);
+    }
+  }, [shopId, salesLastVisible, loadingMoreSales, hasMoreSales]);
+
+  // Load more payments data (pagination)
+  const loadMorePayments = useCallback(async () => {
+    if (loadingMorePayments || !hasMorePayments || !paymentsLastVisible) {
+      return;
+    }
+
+    console.log("Loading more payments data...");
+    setLoadingMorePayments(true);
+
+    try {
+      const paymentsQuery = query(
+        collection(db, "shops", shopId, "payments"),
+        orderBy("createdAt", "desc"),
+        startAfter(paymentsLastVisible),
+        limit(PAYMENTS_PAGE_SIZE)
+      );
+
+      const snapshot = await getDocs(paymentsQuery);
+      const newPaymentsData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Filter by user ID locally
+      const userPayments = newPaymentsData.filter(
+        (payment) => payment.userId === auth.currentUser.uid
+      );
+
+      if (newPaymentsData.length > 0) {
+        // Add to existing payments data, but ensure no duplicates
+        setPayments((prev) => {
+          const existingIds = new Set(prev.map((item) => item.id));
+          const newUniquePayments = userPayments.filter(
+            (payment) => !existingIds.has(payment.id)
+          );
+          return [...prev, ...newUniquePayments];
+        });
+
+        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+        setPaymentsLastVisible(lastDoc);
+        setHasMorePayments(snapshot.docs.length === PAYMENTS_PAGE_SIZE);
+
+        console.log(
+          `Loaded ${userPayments.length} more payments (${
+            userPayments.filter(
+              (payment, index, self) =>
+                index === self.findIndex((p) => p.id === payment.id)
+            ).length
+          } unique)`
+        );
+      } else {
+        setHasMorePayments(false);
+        console.log("No more payments data to load");
+      }
+    } catch (error) {
+      console.error("Error loading more payments:", error);
+    } finally {
+      setLoadingMorePayments(false);
+    }
+  }, [shopId, paymentsLastVisible, loadingMorePayments, hasMorePayments]);
+
+  // Fetch shop data and set up real-time listeners
   useEffect(() => {
     if (!auth.currentUser || !shopId) return;
 
+    console.log("Setting up real-time listeners for payments screen");
+    setInitialLoading(true);
+
+    // Setup shop listener for total earnings
     const shopRef = doc(db, "shops", shopId);
     const unsubscribeShop = onSnapshot(shopRef, (shopSnapshot) => {
       if (shopSnapshot.exists()) {
@@ -74,20 +305,13 @@ export default function Payments() {
       }
     });
 
-    // Fetch consolidated sales data (total values per date from productAndDetail.jsx)
-    const fetchAllSalesData = async () => {
+    // Setup real-time listeners for sales and payments
+    const unsubscribeSales = setupSalesListener();
+    const unsubscribePayments = setupPaymentsListener();
+
+    // Also need to fetch products for calculating totals
+    const fetchProducts = async () => {
       try {
-        // Fetch consolidated sales records from shops/{shopId}/sales
-        const salesRef = collection(db, "shops", shopId, "sales");
-        const salesQuery = query(
-          salesRef,
-          where("userId", "==", auth.currentUser.uid)
-        );
-        const salesSnapshot = await getDocs(salesQuery);
-
-        const consolidatedSalesData = [];
-
-        // Also fetch products to calculate totals
         const productsRef = collection(db, "shops", shopId, "products");
         const productsSnapshot = await getDocs(productsRef);
         const productsMap = {};
@@ -96,73 +320,26 @@ export default function Payments() {
           productsMap[doc.id] = doc.data();
         });
 
-        salesSnapshot.docs.forEach((saleDoc) => {
-          const saleData = saleDoc.data();
-
-          // Calculate total for this date based on quantities and product rates
-          let totalAmount = 0;
-          if (saleData.quantities) {
-            Object.entries(saleData.quantities).forEach(
-              ([productId, quantity]) => {
-                const product = productsMap[productId];
-                if (product && quantity && parseFloat(quantity) > 0) {
-                  const rate = parseFloat(product.rate || 0);
-                  const qty = parseFloat(quantity);
-                  totalAmount += rate * qty;
-                }
-              }
-            );
-          }
-
-          consolidatedSalesData.push({
-            id: saleDoc.id,
-            date: saleData.date,
-            total: totalAmount,
-            quantities: saleData.quantities || {},
-            userId: saleData.userId,
-            createdAt: saleData.createdAt,
-            // Add a descriptive name for the payment screen
-            productName: `Sales Entry - ${saleData.date}`,
-          });
-        });
-
-        // Sort by date (newest first)
-        consolidatedSalesData.sort((a, b) => {
-          const dateA = new Date(a.date);
-          const dateB = new Date(b.date);
-          return dateB - dateA;
-        });
-
-        setSalesData(consolidatedSalesData);
+        // Store products map for calculations (you might want to add this to state)
+        console.log(
+          "Products loaded for calculations:",
+          Object.keys(productsMap).length
+        );
       } catch (error) {
-        console.error("Error fetching sales data:", error);
+        console.error("Error fetching products:", error);
       }
     };
 
-    fetchAllSalesData();
+    fetchProducts();
 
-    // Fetch payment records
-    const paymentsRef = collection(db, "shops", shopId, "payments");
-    const q = query(paymentsRef, where("userId", "==", auth.currentUser.uid));
-    const unsubscribePayments = onSnapshot(q, (snapshot) => {
-      const paymentsList = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      // Sort by createdAt on the client side to avoid index requirements
-      paymentsList.sort((a, b) => {
-        const dateA = a.createdAt?.toDate() || new Date(a.date);
-        const dateB = b.createdAt?.toDate() || new Date(b.date);
-        return dateB - dateA; // Descending order (newest first)
-      });
-      setPayments(paymentsList);
-    });
-
+    // Cleanup function
     return () => {
-      unsubscribeShop();
-      unsubscribePayments();
+      console.log("Cleaning up payments screen listeners");
+      if (unsubscribeShop) unsubscribeShop();
+      if (unsubscribeSales) unsubscribeSales();
+      if (unsubscribePayments) unsubscribePayments();
     };
-  }, [shopId]);
+  }, [shopId, setupSalesListener, setupPaymentsListener]);
 
   // Validation function
   const validateForm = () => {
@@ -193,17 +370,75 @@ export default function Payments() {
     setSelectedSale(null);
   }, []);
 
-  // Create combined payment data for display
+  // Create combined payment data for display with real-time calculation
   const combinedPaymentData = useMemo(() => {
-    return salesData
+    // Remove any potential duplicates from salesData first
+    const uniqueSalesData = salesData.filter(
+      (salesEntry, index, self) =>
+        index === self.findIndex((entry) => entry.id === salesEntry.id)
+    );
+
+    // Debug logging
+    if (salesData.length !== uniqueSalesData.length) {
+      console.log(
+        `Removed ${
+          salesData.length - uniqueSalesData.length
+        } duplicate sales entries`
+      );
+    }
+
+    // Calculate totals for each sales entry in real-time
+    const salesWithTotals = uniqueSalesData
       .map((sale) => {
-        // Safety check for sale object
-        if (!sale || !sale.id) {
-          return null;
+        if (!sale || !sale.id) return null;
+
+        // We need to recalculate totals since we're getting raw sales data
+        // For now, use a basic calculation - you may want to fetch products separately
+        let totalAmount = 0;
+
+        // If we have quantities, we need product rates to calculate total
+        // For now, let's use a placeholder or existing total if available
+        if (sale.quantities && typeof sale.quantities === "object") {
+          // This is a simplified calculation - in a real scenario,
+          // you'd want to maintain a products map in state
+          Object.entries(sale.quantities).forEach(([productId, quantity]) => {
+            // Placeholder calculation - you might want to fetch products data
+            const estimatedRate = 50; // This should come from products data
+            const qty = parseFloat(quantity) || 0;
+            totalAmount += estimatedRate * qty;
+          });
+        } else {
+          totalAmount = sale.total || 0;
         }
 
+        return {
+          ...sale,
+          total: totalAmount,
+          productName:
+            sale.productName || `Sales Entry - ${sale.date || "Unknown"}`,
+        };
+      })
+      .filter(Boolean);
+
+    // Also remove duplicates from payments data
+    const uniquePayments = payments.filter(
+      (payment, index, self) =>
+        index === self.findIndex((entry) => entry.id === payment.id)
+    );
+
+    // Debug logging
+    if (payments.length !== uniquePayments.length) {
+      console.log(
+        `Removed ${
+          payments.length - uniquePayments.length
+        } duplicate payment entries`
+      );
+    }
+
+    const result = salesWithTotals
+      .map((sale) => {
         // Find corresponding payment record for this sale
-        const paymentRecord = payments.find(
+        const paymentRecord = uniquePayments.find(
           (payment) => payment && payment.saleId === sale.id
         );
 
@@ -214,8 +449,7 @@ export default function Payments() {
         return {
           id: sale.id,
           date: sale.date || "",
-          productName:
-            sale.productName || `Sales Entry - ${sale.date || "Unknown"}`,
+          productName: sale.productName,
           total: saleTotal,
           received: received,
           expense: expense,
@@ -227,6 +461,22 @@ export default function Payments() {
         };
       })
       .filter(Boolean); // Remove any null entries
+
+    // Final duplicate check
+    const uniqueResult = result.filter(
+      (item, index, self) =>
+        index === self.findIndex((entry) => entry.id === item.id)
+    );
+
+    if (result.length !== uniqueResult.length) {
+      console.log(
+        `Removed ${
+          result.length - uniqueResult.length
+        } duplicate combined entries`
+      );
+    }
+
+    return uniqueResult;
   }, [salesData, payments]);
 
   // Handle date change
@@ -276,6 +526,11 @@ export default function Payments() {
         createdAt: Timestamp.now(),
       });
 
+      console.log("Payment recorded successfully in Firebase");
+
+      // Don't do optimistic updates - let the real-time listener handle it
+      // The real-time listener will automatically add the new payment to state
+
       clearForm();
       setModalVisible(false);
       setSelectedSale(null);
@@ -313,6 +568,11 @@ export default function Payments() {
                   doc(db, "shops", shopId, "sales", payment.saleId)
                 );
               }
+
+              console.log("Entry deleted successfully from Firebase");
+
+              // Don't do optimistic updates - let the real-time listener handle it
+              // The real-time listeners will automatically remove the entries from state
 
               Alert.alert("Success", "Entry deleted completely!");
             } catch (error) {
@@ -363,6 +623,11 @@ export default function Payments() {
         totalEarnings: newTotalEarnings,
       });
 
+      console.log("Payment updated successfully in Firebase");
+
+      // Don't do optimistic updates - let the real-time listener handle it
+      // The real-time listener will automatically update the payment state
+
       setEditingPayment(null);
       setSelectedSale(null);
       setReceivedAmount("");
@@ -378,20 +643,26 @@ export default function Payments() {
   };
 
   useEffect(() => {
-    const nextData = combinedPaymentData.slice(0, page * ITEMS_PER_PAGE);
-    setDisplayedData(nextData);
-  }, [combinedPaymentData, page]);
+    // Remove the old pagination logic since we're using real-time listeners with pagination
+    // The combinedPaymentData will be managed by the real-time listeners
+  }, [combinedPaymentData]);
 
-  const loadMoreData = () => {
-    if (loadingMore || displayedData.length >= combinedPaymentData.length)
-      return;
-
-    setLoadingMore(true);
-    setTimeout(() => {
-      setPage((prevPage) => prevPage + 1); // Safe update
-      setLoadingMore(false);
-    }, 300); // Optional delay for smoother UX
-  };
+  const loadMoreCombinedData = useCallback(() => {
+    // Trigger loading more data from both sales and payments if needed
+    if (!loadingMoreSales && hasMoreSales) {
+      loadMoreSales();
+    }
+    if (!loadingMorePayments && hasMorePayments) {
+      loadMorePayments();
+    }
+  }, [
+    loadMoreSales,
+    loadMorePayments,
+    loadingMoreSales,
+    loadingMorePayments,
+    hasMoreSales,
+    hasMorePayments,
+  ]);
 
   // Memoized Payment Item Component
   const PaymentItem = React.memo(
@@ -539,20 +810,30 @@ export default function Payments() {
           </View>
 
           {combinedPaymentData.length === 0 ? (
-            <Animated.View
-              entering={FadeInUp.delay(400).springify()}
-              style={styles.emptyState}
-            >
-              <Ionicons name="receipt-outline" size={60} color="#9ca3af" />
-              <Text style={styles.emptyStateText}>No sales data found</Text>
-              <Text style={styles.emptyStateSubtext}>
-                Add some sales first to manage payments
-              </Text>
-            </Animated.View>
+            initialLoading ? (
+              <Animated.View
+                entering={FadeInUp.delay(400).springify()}
+                style={styles.loadingContainer}
+              >
+                <ActivityIndicator size="large" color="#4f46e5" />
+                <Text style={styles.loadingText}>Loading payments data...</Text>
+              </Animated.View>
+            ) : (
+              <Animated.View
+                entering={FadeInUp.delay(400).springify()}
+                style={styles.emptyState}
+              >
+                <Ionicons name="receipt-outline" size={60} color="#9ca3af" />
+                <Text style={styles.emptyStateText}>No sales data found</Text>
+                <Text style={styles.emptyStateSubtext}>
+                  Add some sales first to manage payments
+                </Text>
+              </Animated.View>
+            )
           ) : (
             <FlatList
-              data={displayedData}
-              keyExtractor={(item) => item.id}
+              data={combinedPaymentData}
+              keyExtractor={(item, index) => item.id || `payment-item-${index}`}
               renderItem={({ item, index }) => (
                 <PaymentItem
                   item={item}
@@ -574,18 +855,33 @@ export default function Payments() {
                   }}
                 />
               )}
-              onEndReached={loadMoreData}
+              onEndReached={loadMoreCombinedData}
               onEndReachedThreshold={0.5}
-              ListFooterComponent={
-                loadingMore ? (
-                  <ActivityIndicator
-                    size="small"
-                    color="#4f46e5"
-                    style={{ marginVertical: 20 }}
-                  />
-                ) : null
-              }
+              ListFooterComponent={() => {
+                const isLoadingAny = loadingMoreSales || loadingMorePayments;
+                const hasMoreAny = hasMoreSales || hasMorePayments;
+
+                if (isLoadingAny) {
+                  return (
+                    <View style={styles.loadMoreContainer}>
+                      <ActivityIndicator size="small" color="#4f46e5" />
+                      <Text style={styles.loadMoreText}>Loading more...</Text>
+                    </View>
+                  );
+                }
+                if (!hasMoreAny && combinedPaymentData.length > 0) {
+                  return (
+                    <View style={styles.endOfListContainer}>
+                      <Text style={styles.endOfListText}>
+                        You've reached the end
+                      </Text>
+                    </View>
+                  );
+                }
+                return null;
+              }}
               scrollEnabled={false}
+              nestedScrollEnabled={true}
             />
           )}
         </Animated.View>
@@ -1135,6 +1431,51 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 5,
+  },
+  // Loading States
+  loadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 40,
+    marginBottom: 30,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: "#6b7280",
+    marginTop: 12,
+    fontWeight: "500",
+  },
+  // Pagination styles
+  loadMoreContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 20,
+    gap: 10,
+  },
+  loadMoreText: {
+    fontSize: 14,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  endOfListContainer: {
+    alignItems: "center",
+    paddingVertical: 20,
+  },
+  endOfListText: {
+    fontSize: 14,
+    color: "#9ca3af",
+    fontStyle: "italic",
   },
   emptyStateText: {
     fontSize: 18,

@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  FlatList,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import Animated, {
@@ -31,6 +32,10 @@ import {
   doc,
   updateDoc,
   deleteDoc,
+  onSnapshot,
+  orderBy,
+  limit,
+  startAfter,
 } from "firebase/firestore";
 
 export default function ProductAndDetail() {
@@ -52,74 +57,153 @@ export default function ProductAndDetail() {
   const [editingSalesEntry, setEditingSalesEntry] = useState(null); // Track editing sales entry
   const [showDatePicker, setShowDatePicker] = useState(false); // For date picker modal
 
-  // Fetch products from Firebase
-  const fetchProducts = async () => {
-    try {
-      if (!auth.currentUser || !shopId) return;
+  // Pagination states
+  const [salesLastVisible, setSalesLastVisible] = useState(null);
+  const [loadingMoreSales, setLoadingMoreSales] = useState(false);
+  const [hasMoreSales, setHasMoreSales] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
 
-      // Use subcollection path: shops/{shopId}/products
-      const productsQuery = query(collection(db, "shops", shopId, "products"));
+  // Constants for pagination
+  const PRODUCTS_PAGE_SIZE = 25;
+  const SALES_PAGE_SIZE = 20;
 
-      const querySnapshot = await getDocs(productsQuery);
-      const productsList = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+  // Setup real-time listener for products (all products for now since usually small dataset)
+  const setupProductsListener = useCallback(() => {
+    if (!auth.currentUser || !shopId) return;
 
-      // Sort by creation date on the client side
-      productsList.sort((a, b) => {
-        if (a.createdAt && b.createdAt) {
-          // Handle both Timestamp and Date objects
-          const aTime = a.createdAt.seconds
-            ? a.createdAt.seconds * 1000
-            : new Date(a.createdAt).getTime();
-          const bTime = b.createdAt.seconds
-            ? b.createdAt.seconds * 1000
-            : new Date(b.createdAt).getTime();
-          return aTime - bTime;
-        }
-        return 0;
-      });
+    console.log("Setting up products real-time listener");
 
-      setProducts(productsList);
-    } catch (error) {
-      console.error("Error fetching products:", error);
-      Alert.alert("Error", "Failed to load products. Please try again.");
+    const productsQuery = query(
+      collection(db, "shops", shopId, "products"),
+      orderBy("createdAt", "asc")
+    );
+
+    const unsubscribe = onSnapshot(
+      productsQuery,
+      (snapshot) => {
+        const productsList = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        setProducts(productsList);
+        console.log(
+          `Real-time products update: ${productsList.length} products`
+        );
+      },
+      (error) => {
+        console.error("Error in products listener:", error);
+        Alert.alert("Error", "Failed to sync products. Please refresh.");
+      }
+    );
+
+    return unsubscribe;
+  }, [shopId]);
+
+  // Setup real-time listener for first page of sales data with pagination
+  const setupSalesListener = useCallback(() => {
+    if (!auth.currentUser || !shopId) return;
+
+    console.log("Setting up sales real-time listener");
+
+    // Option 1: Remove userId filter if shop access is already secured
+    // Since users should only access their own shops, we might not need userId filter
+    const salesQuery = query(
+      collection(db, "shops", shopId, "sales"),
+      orderBy("date", "desc"),
+      limit(SALES_PAGE_SIZE)
+    );
+
+    // Option 2: Use this version if you create the composite index
+    // const salesQuery = query(
+    //   collection(db, "shops", shopId, "sales"),
+    //   where("userId", "==", auth.currentUser.uid),
+    //   orderBy("date", "desc"),
+    //   limit(SALES_PAGE_SIZE)
+    // );
+
+    const unsubscribe = onSnapshot(
+      salesQuery,
+      (snapshot) => {
+        const salesList = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        setSalesData(salesList);
+
+        // Set pagination state
+        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+        setSalesLastVisible(lastDoc);
+        setHasMoreSales(snapshot.docs.length === SALES_PAGE_SIZE);
+        setInitialLoading(false);
+
+        console.log(
+          `Real-time sales update: ${salesList.length} sales entries`
+        );
+      },
+      (error) => {
+        console.error("Error in sales listener:", error);
+        Alert.alert("Error", "Failed to sync sales data. Please refresh.");
+        setInitialLoading(false);
+      }
+    );
+
+    return unsubscribe;
+  }, [shopId]);
+
+  // Load more sales data (pagination)
+  const loadMoreSales = useCallback(async () => {
+    if (loadingMoreSales || !hasMoreSales || !salesLastVisible) {
+      return;
     }
-  };
 
-  // Fetch sales data from Firebase
-  const fetchSalesData = async () => {
+    console.log("Loading more sales data...");
+    setLoadingMoreSales(true);
+
     try {
-      if (!auth.currentUser || !shopId) return;
-
-      // Fetch consolidated sales data from shops/{shopId}/sales (for table display)
-      const salesRef = collection(db, "shops", shopId, "sales");
+      // Option 1: Without userId filter (if shop access is secured)
       const salesQuery = query(
-        salesRef,
-        where("userId", "==", auth.currentUser.uid)
+        collection(db, "shops", shopId, "sales"),
+        orderBy("date", "desc"),
+        startAfter(salesLastVisible),
+        limit(SALES_PAGE_SIZE)
       );
 
-      const salesSnapshot = await getDocs(salesQuery);
-      const consolidatedSalesData = salesSnapshot.docs.map((doc) => ({
+      // Option 2: Use this version if you create the composite index
+      // const salesQuery = query(
+      //   collection(db, "shops", shopId, "sales"),
+      //   where("userId", "==", auth.currentUser.uid),
+      //   orderBy("date", "desc"),
+      //   startAfter(salesLastVisible),
+      //   limit(SALES_PAGE_SIZE)
+      // );
+
+      const snapshot = await getDocs(salesQuery);
+      const newSalesData = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
 
-      // Sort by date (latest to oldest)
-      consolidatedSalesData.sort((a, b) => new Date(b.date) - new Date(a.date));
+      if (newSalesData.length > 0) {
+        setSalesData((prev) => [...prev, ...newSalesData]);
 
-      setSalesData(consolidatedSalesData);
-      console.log(
-        "Fetched sales data:",
-        consolidatedSalesData.length,
-        "entries"
-      );
+        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+        setSalesLastVisible(lastDoc);
+        setHasMoreSales(snapshot.docs.length === SALES_PAGE_SIZE);
+
+        console.log(`Loaded ${newSalesData.length} more sales entries`);
+      } else {
+        setHasMoreSales(false);
+        console.log("No more sales data to load");
+      }
     } catch (error) {
-      console.error("Error fetching sales data:", error);
-      Alert.alert("Error", "Failed to load sales data. Please try again.");
+      console.error("Error loading more sales:", error);
+      Alert.alert("Error", "Failed to load more sales data.");
+    } finally {
+      setLoadingMoreSales(false);
     }
-  };
+  }, [shopId, salesLastVisible, loadingMoreSales, hasMoreSales]);
 
   // Validate form inputs
   const validateForm = () => {
@@ -229,20 +313,8 @@ export default function ProductAndDetail() {
           editingSalesEntry.id
         );
 
-        // Update local state
-        const updatedSalesEntry = {
-          ...salesEntry,
-          id: editingSalesEntry.id,
-          createdAt: editingSalesEntry.createdAt,
-        };
-
-        setSalesData((prev) =>
-          prev
-            .map((entry) =>
-              entry.id === editingSalesEntry.id ? updatedSalesEntry : entry
-            )
-            .sort((a, b) => new Date(b.date) - new Date(a.date))
-        );
+        // Don't do optimistic update - let the real-time listener handle it
+        // The real-time listener will automatically update the state
 
         Alert.alert("Success", "Sales data updated successfully!");
       } else {
@@ -308,27 +380,13 @@ export default function ProductAndDetail() {
           consolidatedEntry
         );
 
-        // Add to local state with Firebase ID
-        const salesEntryWithId = {
-          ...consolidatedEntry,
-          id: consolidatedDocRef.id,
-        };
+        console.log(
+          "Sales entry created in Firebase with ID:",
+          consolidatedDocRef.id
+        );
 
-        setSalesData((prev) => {
-          // Check if date already exists, if so, update it
-          const existingIndex = prev.findIndex(
-            (entry) => entry.date === salesDate
-          );
-          if (existingIndex >= 0) {
-            const updated = [...prev];
-            updated[existingIndex] = salesEntryWithId;
-            return updated;
-          } else {
-            return [...prev, salesEntryWithId].sort(
-              (a, b) => new Date(b.date) - new Date(a.date)
-            );
-          }
-        });
+        // Don't do optimistic update - let the real-time listener handle it
+        // The real-time listener will automatically add the new entry to the state
 
         Alert.alert("Success", "Sales data saved successfully!");
       }
@@ -422,19 +480,10 @@ export default function ProductAndDetail() {
           updatedAt: Timestamp.now(),
         });
 
-        // Update local state
-        setProducts(
-          products.map((product) =>
-            product.id === editingProduct.id
-              ? {
-                  ...product,
-                  name: String(productName || "").trim(),
-                  rate: String(productRate || "").trim(),
-                  updatedAt: Timestamp.now(),
-                }
-              : product
-          )
-        );
+        console.log("Product updated in Firebase:", editingProduct.id);
+
+        // Don't do optimistic update - let the real-time listener handle it
+        // The real-time listener will automatically update the state
 
         Alert.alert("Success", "Product updated successfully!");
       } else {
@@ -451,15 +500,9 @@ export default function ProductAndDetail() {
 
         console.log("Product added successfully with ID:", docRef.id); // Debug log
 
-        const newProduct = {
-          id: docRef.id,
-          name: String(productName || "").trim(),
-          rate: String(productRate || "").trim(),
-          userId: auth.currentUser.uid,
-          createdAt: Timestamp.now(),
-        };
+        // Don't do optimistic update - let the real-time listener handle it
+        // The real-time listener will automatically add the new product to state
 
-        setProducts([...products, newProduct]);
         Alert.alert("Success", "Product added successfully!");
       }
 
@@ -475,16 +518,25 @@ export default function ProductAndDetail() {
   };
 
   useEffect(() => {
-    // Add a small delay to ensure auth state is ready
-    const timer = setTimeout(() => {
-      if (auth.currentUser && shopId) {
-        fetchProducts();
-        fetchSalesData();
-      }
-    }, 1000);
+    if (!auth.currentUser || !shopId) {
+      console.log("Auth or shopId not ready");
+      return;
+    }
 
-    return () => clearTimeout(timer);
-  }, [shopId]);
+    console.log("Setting up real-time listeners for shop:", shopId);
+    setInitialLoading(true);
+
+    // Setup real-time listeners
+    const unsubscribeProducts = setupProductsListener();
+    const unsubscribeSales = setupSalesListener();
+
+    // Cleanup function
+    return () => {
+      console.log("Cleaning up real-time listeners");
+      if (unsubscribeProducts) unsubscribeProducts();
+      if (unsubscribeSales) unsubscribeSales();
+    };
+  }, [shopId, setupProductsListener, setupSalesListener]);
 
   // Debug effect to track modal state
   useEffect(() => {
@@ -498,6 +550,12 @@ export default function ProductAndDetail() {
   const tableData = useMemo(() => {
     if (products.length === 0) return null;
 
+    // Remove any potential duplicates from salesData
+    const uniqueSalesData = salesData.filter(
+      (salesEntry, index, self) =>
+        index === self.findIndex((entry) => entry.id === salesEntry.id)
+    );
+
     return {
       headerColumns: products.map((product) => ({
         id: product.id,
@@ -507,7 +565,7 @@ export default function ProductAndDetail() {
         id: product.id,
         rate: product.rate,
       })),
-      salesRows: salesData.map((salesEntry) => {
+      salesRows: uniqueSalesData.map((salesEntry) => {
         // Safely access quantities with fallback
         const quantities = salesEntry.quantities || {};
 
@@ -546,10 +604,13 @@ export default function ProductAndDetail() {
                   doc(db, "shops", shopId, "sales", salesEntry.id)
                 );
 
-                // Update local state
-                setSalesData((prev) =>
-                  prev.filter((entry) => entry.id !== salesEntry.id)
+                console.log(
+                  "Sales entry deleted from Firebase:",
+                  salesEntry.id
                 );
+
+                // Don't do optimistic update - let the real-time listener handle it
+                // The real-time listener will automatically remove the entry from state
 
                 Alert.alert("Success", "Sales entry deleted successfully!");
               } catch (error) {
@@ -640,6 +701,18 @@ export default function ProductAndDetail() {
   );
 
   const renderProductTable = () => {
+    if (initialLoading) {
+      return (
+        <Animated.View
+          entering={FadeInUp.delay(300).springify()}
+          style={styles.loadingContainer}
+        >
+          <ActivityIndicator size="large" color="#4f46e5" />
+          <Text style={styles.loadingText}>Loading your data...</Text>
+        </Animated.View>
+      );
+    }
+
     if (!tableData) {
       return (
         <Animated.View
@@ -697,16 +770,16 @@ export default function ProductAndDetail() {
                   key={`rate-${rate.id}`}
                   style={[styles.tableCell, styles.editableCell]}
                   onPress={() => {
-                    console.log("Rate cell clicked for ID:", rate.id); // Debug log
+                    console.log("Rate cell clicked for ID:", rate.id);
                     console.log(
                       "Available products:",
                       products.map((p) => ({ id: p.id, name: p.name }))
-                    ); // Debug log
+                    );
 
                     const productToEdit = products.find(
                       (p) => p.id === rate.id
                     );
-                    console.log("Found product to edit:", productToEdit); // Debug log
+                    console.log("Found product to edit:", productToEdit);
 
                     if (productToEdit) {
                       startEditingProduct(productToEdit);
@@ -731,22 +804,21 @@ export default function ProductAndDetail() {
               </View>
             </View>
 
-            {/* Sales Data Rows */}
-            {tableData?.salesRows?.length > 0 &&
-              tableData.salesRows.map((salesRow) => {
-                // Find the original sales entry from salesData
+            {/* Sales Data Rows with Pagination */}
+            <FlatList
+              data={tableData.salesRows}
+              keyExtractor={(item, index) => item.id || `sales-row-${index}`}
+              renderItem={({ item: salesRow }) => {
                 const originalSalesEntry = salesData.find(
                   (entry) => entry.id === salesRow.id
                 );
 
-                // Skip if salesRow is invalid
                 if (!salesRow || !salesRow.id) {
                   return null;
                 }
 
                 return (
                   <SalesRow
-                    key={salesRow.id}
                     salesEntry={salesRow}
                     originalSalesEntry={originalSalesEntry}
                     products={products}
@@ -754,7 +826,32 @@ export default function ProductAndDetail() {
                     onDelete={handleDeleteSales}
                   />
                 );
-              })}
+              }}
+              onEndReached={loadMoreSales}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={() => {
+                if (loadingMoreSales) {
+                  return (
+                    <View style={styles.loadMoreContainer}>
+                      <ActivityIndicator size="small" color="#4f46e5" />
+                      <Text style={styles.loadMoreText}>Loading more...</Text>
+                    </View>
+                  );
+                }
+                if (!hasMoreSales && salesData.length > 0) {
+                  return (
+                    <View style={styles.endOfListContainer}>
+                      <Text style={styles.endOfListText}>
+                        You've reached the end
+                      </Text>
+                    </View>
+                  );
+                }
+                return null;
+              }}
+              scrollEnabled={false} // Disable FlatList scrolling since we're in a ScrollView
+              nestedScrollEnabled={true}
+            />
           </View>
         </ScrollView>
       </Animated.View>
@@ -1253,6 +1350,51 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     flex: 1,
     textAlign: "center",
+  },
+  // Loading States
+  loadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 40,
+    marginBottom: 30,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: "#6b7280",
+    marginTop: 12,
+    fontWeight: "500",
+  },
+  // Pagination styles
+  loadMoreContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 20,
+    gap: 10,
+  },
+  loadMoreText: {
+    fontSize: 14,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  endOfListContainer: {
+    alignItems: "center",
+    paddingVertical: 20,
+  },
+  endOfListText: {
+    fontSize: 14,
+    color: "#9ca3af",
+    fontStyle: "italic",
   },
   // Empty State
   emptyStateContainer: {
