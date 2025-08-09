@@ -367,11 +367,20 @@ export default function ProductAndDetail() {
         console.log(`Created ${docRefs.length} individual sales records`);
 
         // Also create a consolidated record for the table display
+
+        // Calculate total for the consolidated entry
+        const total = products.reduce((sum, product) => {
+          const qty = parseFloat(productQuantities[product.id] || 0);
+          const rate = parseFloat(product.rate || 0);
+          return sum + qty * rate;
+        }, 0);
+
         const consolidatedEntry = {
           date: salesDate,
           quantities: { ...productQuantities },
           userId: auth.currentUser.uid,
           createdAt: Timestamp.now(),
+          total, // Store the total value
         };
 
         const consolidatedRef = collection(db, "shops", shopId, "sales");

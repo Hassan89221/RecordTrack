@@ -391,29 +391,9 @@ export default function Payments() {
     const salesWithTotals = uniqueSalesData
       .map((sale) => {
         if (!sale || !sale.id) return null;
-
-        // We need to recalculate totals since we're getting raw sales data
-        // For now, use a basic calculation - you may want to fetch products separately
-        let totalAmount = 0;
-
-        // If we have quantities, we need product rates to calculate total
-        // For now, let's use a placeholder or existing total if available
-        if (sale.quantities && typeof sale.quantities === "object") {
-          // This is a simplified calculation - in a real scenario,
-          // you'd want to maintain a products map in state
-          Object.entries(sale.quantities).forEach(([productId, quantity]) => {
-            // Placeholder calculation - you might want to fetch products data
-            const estimatedRate = 50; // This should come from products data
-            const qty = parseFloat(quantity) || 0;
-            totalAmount += estimatedRate * qty;
-          });
-        } else {
-          totalAmount = sale.total || 0;
-        }
-
         return {
           ...sale,
-          total: totalAmount,
+          total: sale.total || 0,
           productName:
             sale.productName || `Sales Entry - ${sale.date || "Unknown"}`,
         };

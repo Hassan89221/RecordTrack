@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Dimensions,
   TextInput,
-  ScrollView,
 } from "react-native";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase.config";
@@ -35,16 +34,13 @@ export default function ForgotPassword() {
       setIsSuccess(false);
       return;
     }
-
     if (!email.includes("@") || !email.includes(".")) {
       setMessage("Please enter a valid email address");
       setIsSuccess(false);
       return;
     }
-
     setIsLoading(true);
     setMessage(null);
-
     try {
       await sendPasswordResetEmail(auth, email);
       setMessage("Password reset link sent to your email successfully!");
@@ -71,99 +67,111 @@ export default function ForgotPassword() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <Animated.View
-          entering={SlideInDown.delay(100).springify()}
-          style={styles.headerContainer}
-        >
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#4f46e5" />
-          </TouchableOpacity>
-          <View style={styles.iconContainer}>
-            <Ionicons name="lock-closed" size={60} color="#4f46e5" />
-          </View>
-          <Text style={styles.title}>Reset Password</Text>
-          <Text style={styles.subtitle}>
-            Enter your email address and we'll send you a link to reset your
-            password
-          </Text>
-        </Animated.View>
+      <StatusBar backgroundColor="#4f46e5" barStyle="light-content" />
+      {/* Background */}
+      <Image
+        source={require("../assets/Deer.jpg")}
+        style={styles.backgroundImage}
+      />
+      <View style={styles.overlay} />
 
-        <Animated.View
-          entering={FadeInUp.delay(300).springify()}
-          style={styles.formCard}
+      {/* Header Section (match login) */}
+      <Animated.View
+        style={styles.headerSection}
+        entering={FadeInUp.duration(800)}
+      >
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
         >
+          <Ionicons name="chevron-back" size={24} color="white" />
+        </TouchableOpacity>
+        <View style={styles.logoContainer}>
+          <Animated.View
+            style={styles.logoIcon}
+            entering={BounceIn.delay(400).duration(1000)}
+          >
+            <MaterialIcons name="analytics" size={32} color="white" />
+          </Animated.View>
+          <Text style={styles.logoText}>RecordTrack</Text>
+        </View>
+      </Animated.View>
+
+      {/* Form Card (match login) */}
+      <Animated.View
+        style={styles.formCard}
+        entering={SlideInDown.delay(600).duration(800)}
+      >
+        <Text style={styles.welcomeTitle}>Reset Password</Text>
+        <Text style={styles.welcomeSubtitle}>
+          Enter your email address and we'll send you a link to reset your
+          password
+        </Text>
+        {/* Email Input */}
+        <Animated.View
+          style={styles.inputGroup}
+          entering={SlideInRight.delay(800).duration(600)}
+        >
+          <Text style={styles.inputLabel}>Email Address</Text>
           <View style={styles.inputContainer}>
-            <Ionicons
-              name="mail-outline"
-              size={20}
-              color="#6b7280"
-              style={styles.inputIcon}
-            />
+            <MaterialIcons name="email" size={20} color="#6b7280" />
             <TextInput
-              style={styles.input}
-              placeholder="Enter your email address"
-              placeholderTextColor="#9ca3af"
+              placeholder="Enter your email"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
+              style={styles.input}
               autoCapitalize="none"
-              autoComplete="email"
+              placeholderTextColor="#9ca3af"
             />
           </View>
-
-          {message && (
-            <Animated.View
-              entering={SlideInRight.springify()}
-              style={[
-                styles.messageContainer,
-                isSuccess ? styles.successContainer : styles.errorContainer,
-              ]}
-            >
-              <Ionicons
-                name={isSuccess ? "checkmark-circle" : "alert-circle"}
-                size={16}
-                color={isSuccess ? "#059669" : "#dc2626"}
-              />
-              <Text
-                style={[
-                  styles.messageText,
-                  isSuccess ? styles.successText : styles.errorText,
-                ]}
-              >
-                {message}
-              </Text>
-            </Animated.View>
-          )}
-
-          <Animated.View entering={BounceIn.delay(500)}>
-            <TouchableOpacity
-              style={[
-                styles.resetButton,
-                isLoading && styles.resetButtonDisabled,
-              ]}
-              onPress={handleResetPassword}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#ffffff" size="small" />
-              ) : (
-                <>
-                  <Ionicons name="paper-plane" size={20} color="#ffffff" />
-                  <Text style={styles.resetButtonText}>Send Reset Link</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </Animated.View>
         </Animated.View>
-      </ScrollView>
+
+        {/* Error/Success Message */}
+        {message && (
+          <Animated.View
+            style={[
+              isSuccess ? styles.successContainer : styles.errorContainer,
+            ]}
+            entering={FadeInUp.duration(300)}
+          >
+            <MaterialIcons
+              name={isSuccess ? "check-circle" : "error-outline"}
+              size={20}
+              color={isSuccess ? "#059669" : "#ef4444"}
+            />
+            <Text style={isSuccess ? styles.successText : styles.errorText}>
+              {message}
+            </Text>
+          </Animated.View>
+        )}
+
+        {/* Reset Button */}
+        <Animated.View
+          style={styles.buttonContainer}
+          entering={BounceIn.delay(1400).duration(800)}
+        >
+          <TouchableOpacity
+            onPress={handleResetPassword}
+            style={[styles.loginButton, isLoading && styles.buttonDisabled]}
+            disabled={isLoading}
+            activeOpacity={0.8}
+          >
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="white" />
+                <Text style={styles.loadingText}>Sending...</Text>
+              </View>
+            ) : (
+              <View style={styles.buttonContent}>
+                <Text style={styles.loginButtonText}>Send Reset Link</Text>
+                <Ionicons name="arrow-forward" size={20} color="white" />
+              </View>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+      </Animated.View>
     </View>
   );
 }
@@ -173,62 +181,88 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f8fafc",
   },
-  scrollView: {
-    flex: 1,
+  backgroundImage: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-    padding: 20,
-    paddingTop: 60,
+  overlay: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(79, 70, 229, 0.85)",
   },
-  headerContainer: {
+  headerSection: {
+    paddingTop: 50,
+    paddingHorizontal: 20,
+    flexDirection: "row",
     alignItems: "center",
-    marginBottom: 40,
-    position: "relative",
+    justifyContent: "space-between",
   },
   backButton: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    zIndex: 1,
-    padding: 10,
-  },
-  iconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "#ede9fe",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 20,
   },
-  title: {
+  logoContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+    marginRight: 40, // Compensate for back button
+  },
+  logoIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  logoText: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "white",
+    letterSpacing: 0.5,
+  },
+  formCard: {
+    backgroundColor: "white",
+    borderRadius: 24,
+    padding: 32,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+    marginHorizontal: 20,
+    marginTop: 40,
+  },
+  welcomeTitle: {
     fontSize: 28,
-    fontWeight: "bold",
+    fontWeight: "800",
     color: "#1f2937",
-    marginBottom: 8,
     textAlign: "center",
+    marginBottom: 8,
   },
-  subtitle: {
+  welcomeSubtitle: {
     fontSize: 16,
     color: "#6b7280",
     textAlign: "center",
-    lineHeight: 24,
-    paddingHorizontal: 20,
+    marginBottom: 32,
   },
-  formCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 8,
   },
   inputContainer: {
     flexDirection: "row",
@@ -236,65 +270,93 @@ const styles = StyleSheet.create({
     backgroundColor: "#f9fafb",
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
-    borderWidth: 1,
+    paddingVertical: 4,
+    borderWidth: 1.5,
     borderColor: "#e5e7eb",
-  },
-  inputIcon: {
-    marginRight: 12,
   },
   input: {
     flex: 1,
     fontSize: 16,
     color: "#1f2937",
+    paddingVertical: 12,
+    paddingLeft: 12,
   },
-  messageContainer: {
+  // Error/Success Handling
+  errorContainer: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#fef2f2",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     marginBottom: 16,
-  },
-  successContainer: {
-    backgroundColor: "#ecfdf5",
-    borderColor: "#10b981",
     borderWidth: 1,
+    borderColor: "#fecaca",
   },
-  errorContainer: {
-    backgroundColor: "#fef2f2",
-    borderColor: "#ef4444",
-    borderWidth: 1,
-  },
-  messageText: {
-    flex: 1,
-    marginLeft: 8,
+  errorText: {
+    color: "#ef4444",
     fontSize: 14,
     fontWeight: "500",
+    marginLeft: 8,
+    flex: 1,
+  },
+  successContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ecfdf5",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
   },
   successText: {
     color: "#059669",
+    fontSize: 14,
+    fontWeight: "500",
+    marginLeft: 8,
+    flex: 1,
   },
-  errorText: {
-    color: "#dc2626",
+  // Button
+  buttonContainer: {
+    marginBottom: 24,
   },
-  resetButton: {
+  loginButton: {
     backgroundColor: "#4f46e5",
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    elevation: 4,
+    shadowColor: "#4f46e5",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  buttonDisabled: {
+    backgroundColor: "#9ca3af",
+    elevation: 2,
+  },
+  buttonContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    gap: 8,
   },
-  resetButtonDisabled: {
-    backgroundColor: "#9ca3af",
+  loginButtonText: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "700",
+    marginRight: 8,
   },
-  resetButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "600",
+  loadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "700",
+    marginLeft: 8,
   },
 });

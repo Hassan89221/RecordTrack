@@ -6,7 +6,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  ScrollView,
+  Image,
+  StatusBar,
+  Dimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import {
@@ -15,13 +17,13 @@ import {
   EmailAuthProvider,
   updatePassword,
 } from "firebase/auth";
-import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   SlideInDown,
   FadeInUp,
   SlideInRight,
   BounceIn,
 } from "react-native-reanimated";
+import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 
 export default function ChangePassword() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -117,173 +119,197 @@ export default function ChangePassword() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      <StatusBar backgroundColor="#4f46e5" barStyle="light-content" />
+      {/* Background */}
+      <Image
+        source={require("../assets/Deer.jpg")}
+        style={styles.backgroundImage}
+      />
+      <View style={styles.overlay} />
+
+      {/* Header Section (match login) */}
+      <Animated.View
+        style={styles.headerSection}
+        entering={FadeInUp.duration(800)}
       >
-        <Animated.View
-          entering={SlideInDown.delay(100).springify()}
-          style={styles.headerContainer}
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.push("/shops")}
+          activeOpacity={0.7}
         >
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
+          <Ionicons name="chevron-back" size={24} color="white" />
+        </TouchableOpacity>
+        <View style={styles.logoContainer}>
+          <Animated.View
+            style={styles.logoIcon}
+            entering={BounceIn.delay(400).duration(1000)}
           >
-            <Ionicons name="arrow-back" size={24} color="#4f46e5" />
-          </TouchableOpacity>
-          <View style={styles.iconContainer}>
-            <Ionicons name="key" size={60} color="#4f46e5" />
-          </View>
-          <Text style={styles.title}>Change Password</Text>
-          <Text style={styles.subtitle}>
+            <MaterialIcons name="analytics" size={32} color="white" />
+          </Animated.View>
+          <Text style={styles.logoText}>RecordTrack</Text>
+        </View>
+      </Animated.View>
+
+      {/* Form Card (match login) */}
+      <Animated.View
+        style={styles.formContainer}
+        entering={SlideInDown.delay(600).duration(800)}
+      >
+        <View style={styles.formCard}>
+          <Text style={styles.welcomeTitle}>Change Password</Text>
+          <Text style={styles.welcomeSubtitle}>
             Enter your current password and choose a new secure password
           </Text>
-        </Animated.View>
 
-        <Animated.View
-          entering={FadeInUp.delay(300).springify()}
-          style={styles.formCard}
-        >
-          <View style={styles.inputContainer}>
-            <Ionicons
-              name="lock-closed-outline"
-              size={20}
-              color="#6b7280"
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Current Password"
-              placeholderTextColor="#9ca3af"
-              secureTextEntry={!currentPasswordVisible}
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              autoCapitalize="none"
-            />
-            <TouchableOpacity
-              onPress={() => setCurrentPasswordVisible(!currentPasswordVisible)}
-              style={styles.eyeButton}
-            >
-              <Ionicons
-                name={
-                  currentPasswordVisible ? "eye-off-outline" : "eye-outline"
+          {/* Current Password */}
+          <Animated.View
+            style={styles.inputGroup}
+            entering={SlideInRight.delay(800).duration(600)}
+          >
+            <Text style={styles.inputLabel}>Current Password</Text>
+            <View style={styles.inputContainer}>
+              <MaterialIcons name="lock" size={20} color="#6b7280" />
+              <TextInput
+                placeholder="Current Password"
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                secureTextEntry={!currentPasswordVisible}
+                style={styles.input}
+                autoCapitalize="none"
+                placeholderTextColor="#9ca3af"
+              />
+              <TouchableOpacity
+                onPress={() =>
+                  setCurrentPasswordVisible(!currentPasswordVisible)
                 }
-                size={20}
-                color="#6b7280"
-              />
+                style={styles.eyeButton}
+              >
+                <Ionicons
+                  name={currentPasswordVisible ? "eye-off" : "eye"}
+                  size={20}
+                  color="#6b7280"
+                />
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+
+          {/* Forgot Password Link */}
+          <Animated.View
+            style={styles.forgotContainer}
+            entering={FadeInUp.delay(1200).duration(600)}
+          >
+            <TouchableOpacity onPress={() => router.push("/forgetpassword")}>
+              <Text style={styles.forgotText}>Forgot Password?</Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
 
-          <TouchableOpacity onPress={() => router.push("/forgetpassword")}>
-            <Text style={styles.forgotPasswordText}>
-              Don't remember your password?
-            </Text>
-          </TouchableOpacity>
-
-          <View style={styles.inputContainer}>
-            <Ionicons
-              name="lock-open-outline"
-              size={20}
-              color="#6b7280"
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="New Password"
-              placeholderTextColor="#9ca3af"
-              secureTextEntry={!newPasswordVisible}
-              value={newPassword}
-              onChangeText={setNewPassword}
-              autoCapitalize="none"
-            />
-            <TouchableOpacity
-              onPress={() => setNewPasswordVisible(!newPasswordVisible)}
-              style={styles.eyeButton}
-            >
-              <Ionicons
-                name={newPasswordVisible ? "eye-off-outline" : "eye-outline"}
-                size={20}
-                color="#6b7280"
+          {/* New Password */}
+          <Animated.View
+            style={styles.inputGroup}
+            entering={SlideInRight.delay(1000).duration(600)}
+          >
+            <Text style={styles.inputLabel}>New Password</Text>
+            <View style={styles.inputContainer}>
+              <MaterialIcons name="lock" size={20} color="#6b7280" />
+              <TextInput
+                placeholder="New Password"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry={!newPasswordVisible}
+                style={styles.input}
+                autoCapitalize="none"
+                placeholderTextColor="#9ca3af"
               />
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                onPress={() => setNewPasswordVisible(!newPasswordVisible)}
+                style={styles.eyeButton}
+              >
+                <Ionicons
+                  name={newPasswordVisible ? "eye-off" : "eye"}
+                  size={20}
+                  color="#6b7280"
+                />
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
 
-          <View style={styles.inputContainer}>
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={20}
-              color="#6b7280"
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Confirm New Password"
-              placeholderTextColor="#9ca3af"
-              secureTextEntry={!confirmPasswordVisible}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              autoCapitalize="none"
-            />
-            <TouchableOpacity
-              onPress={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
-              style={styles.eyeButton}
-            >
-              <Ionicons
-                name={
-                  confirmPasswordVisible ? "eye-off-outline" : "eye-outline"
+          {/* Confirm Password */}
+          <Animated.View
+            style={styles.inputGroup}
+            entering={SlideInRight.delay(1200).duration(600)}
+          >
+            <Text style={styles.inputLabel}>Confirm New Password</Text>
+            <View style={styles.inputContainer}>
+              <MaterialIcons name="lock" size={20} color="#6b7280" />
+              <TextInput
+                placeholder="Confirm New Password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!confirmPasswordVisible}
+                style={styles.input}
+                autoCapitalize="none"
+                placeholderTextColor="#9ca3af"
+              />
+              <TouchableOpacity
+                onPress={() =>
+                  setConfirmPasswordVisible(!confirmPasswordVisible)
                 }
-                size={20}
-                color="#6b7280"
-              />
-            </TouchableOpacity>
-          </View>
+                style={styles.eyeButton}
+              >
+                <Ionicons
+                  name={confirmPasswordVisible ? "eye-off" : "eye"}
+                  size={20}
+                  color="#6b7280"
+                />
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
 
+          {/* Error/Success Message */}
           {message && (
             <Animated.View
-              entering={SlideInRight.springify()}
               style={[
-                styles.messageContainer,
                 isSuccess ? styles.successContainer : styles.errorContainer,
               ]}
+              entering={FadeInUp.duration(300)}
             >
-              <Ionicons
-                name={isSuccess ? "checkmark-circle" : "alert-circle"}
-                size={16}
-                color={isSuccess ? "#059669" : "#dc2626"}
+              <MaterialIcons
+                name={isSuccess ? "check-circle" : "error-outline"}
+                size={20}
+                color={isSuccess ? "#059669" : "#ef4444"}
               />
-              <Text
-                style={[
-                  styles.messageText,
-                  isSuccess ? styles.successText : styles.errorText,
-                ]}
-              >
+              <Text style={isSuccess ? styles.successText : styles.errorText}>
                 {message}
               </Text>
             </Animated.View>
           )}
 
-          <Animated.View entering={BounceIn.delay(500)}>
+          {/* Update Button */}
+          <Animated.View
+            style={styles.buttonContainer}
+            entering={BounceIn.delay(1400).duration(800)}
+          >
             <TouchableOpacity
-              style={[
-                styles.updateButton,
-                loading && styles.updateButtonDisabled,
-              ]}
               onPress={handleChangePassword}
+              style={[styles.loginButton, loading && styles.buttonDisabled]}
               disabled={loading}
+              activeOpacity={0.8}
             >
               {loading ? (
-                <ActivityIndicator color="#ffffff" size="small" />
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="white" />
+                  <Text style={styles.loadingText}>Updating...</Text>
+                </View>
               ) : (
-                <>
-                  <Ionicons name="key" size={20} color="#ffffff" />
-                  <Text style={styles.updateButtonText}>Update Password</Text>
-                </>
+                <View style={styles.buttonContent}>
+                  <Text style={styles.loginButtonText}>Update Password</Text>
+                  <Ionicons name="arrow-forward" size={20} color="white" />
+                </View>
               )}
             </TouchableOpacity>
           </Animated.View>
-        </Animated.View>
-      </ScrollView>
+        </View>
+      </Animated.View>
     </View>
   );
 }
@@ -293,62 +319,92 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f8fafc",
   },
-  scrollView: {
-    flex: 1,
+  backgroundImage: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-    padding: 20,
-    paddingTop: 60,
+  overlay: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(79, 70, 229, 0.85)",
   },
-  headerContainer: {
+  headerSection: {
+    paddingTop: 50,
+    paddingHorizontal: 20,
+    flexDirection: "row",
     alignItems: "center",
-    marginBottom: 40,
-    position: "relative",
+    justifyContent: "space-between",
   },
   backButton: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    zIndex: 1,
-    padding: 10,
-  },
-  iconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "#ede9fe",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 20,
   },
-  title: {
+  logoContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+    marginRight: 40, // Compensate for back button
+  },
+  logoIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  logoText: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "white",
+    letterSpacing: 0.5,
+  },
+  formContainer: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    marginTop: -50,
+  },
+  formCard: {
+    backgroundColor: "white",
+    borderRadius: 24,
+    padding: 32,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  welcomeTitle: {
     fontSize: 28,
-    fontWeight: "bold",
+    fontWeight: "800",
     color: "#1f2937",
-    marginBottom: 8,
     textAlign: "center",
+    marginBottom: 8,
   },
-  subtitle: {
+  welcomeSubtitle: {
     fontSize: 16,
     color: "#6b7280",
     textAlign: "center",
-    lineHeight: 24,
-    paddingHorizontal: 20,
+    marginBottom: 32,
   },
-  formCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 8,
   },
   inputContainer: {
     flexDirection: "row",
@@ -356,74 +412,106 @@ const styles = StyleSheet.create({
     backgroundColor: "#f9fafb",
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
-    borderWidth: 1,
+    paddingVertical: 4,
+    borderWidth: 1.5,
     borderColor: "#e5e7eb",
-  },
-  inputIcon: {
-    marginRight: 12,
   },
   input: {
     flex: 1,
     fontSize: 16,
     color: "#1f2937",
+    paddingVertical: 12,
+    paddingLeft: 12,
   },
   eyeButton: {
-    padding: 4,
+    padding: 8,
   },
-  forgotPasswordText: {
-    color: "#4f46e5",
-    fontSize: 14,
-    textAlign: "center",
-    marginBottom: 16,
-    textDecorationLine: "underline",
-  },
-  messageContainer: {
+  // Error/Success Handling
+  errorContainer: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#fef2f2",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     marginBottom: 16,
-  },
-  successContainer: {
-    backgroundColor: "#ecfdf5",
-    borderColor: "#10b981",
     borderWidth: 1,
+    borderColor: "#fecaca",
   },
-  errorContainer: {
-    backgroundColor: "#fef2f2",
-    borderColor: "#ef4444",
-    borderWidth: 1,
-  },
-  messageText: {
-    flex: 1,
-    marginLeft: 8,
+  errorText: {
+    color: "#ef4444",
     fontSize: 14,
     fontWeight: "500",
+    marginLeft: 8,
+    flex: 1,
+  },
+  successContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ecfdf5",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
   },
   successText: {
     color: "#059669",
+    fontSize: 14,
+    fontWeight: "500",
+    marginLeft: 8,
+    flex: 1,
   },
-  errorText: {
-    color: "#dc2626",
+  // Forgot Password
+  forgotContainer: {
+    alignItems: "flex-end",
+    marginBottom: 24,
   },
-  updateButton: {
+  forgotText: {
+    color: "#4f46e5",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  // Buttons
+  buttonContainer: {
+    marginBottom: 24,
+  },
+  loginButton: {
     backgroundColor: "#4f46e5",
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    elevation: 4,
+    shadowColor: "#4f46e5",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  buttonDisabled: {
+    backgroundColor: "#9ca3af",
+    elevation: 2,
+  },
+  buttonContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
   },
-  updateButtonDisabled: {
-    backgroundColor: "#9ca3af",
+  loginButtonText: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "700",
+    marginRight: 8,
   },
-  updateButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "600",
+  loadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "700",
+    marginLeft: 8,
   },
 });
