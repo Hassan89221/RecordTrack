@@ -290,12 +290,20 @@ export default function ProductAndDetail() {
 
     try {
       if (editingSalesEntry) {
+        // Calculate total for the consolidated entry (same as add)
+        const total = products.reduce((sum, product) => {
+          const qty = parseFloat(productQuantities[product.id] || 0);
+          const rate = parseFloat(product.rate || 0);
+          return sum + qty * rate;
+        }, 0);
+
         // Update existing sales entry (update the consolidated record)
         const salesEntry = {
           date: salesDate,
           quantities: { ...productQuantities },
           userId: auth.currentUser.uid,
           updatedAt: Timestamp.now(),
+          total, // Store the total value
         };
 
         // For editing, we still update the consolidated record in shops/{shopId}/sales
@@ -578,6 +586,34 @@ export default function ProductAndDetail() {
         // Safely access quantities with fallback
         const quantities = salesEntry.quantities || {};
 
+        // Use stored total if available, else fallback to sum of (stored rate * quantity) per product in this entry
+        let total = salesEntry.total;
+        if (typeof total !== "number") {
+          // Fallback: sum using stored rate per product if available
+          total = 0;
+          if (Array.isArray(salesEntry.quantities)) {
+            // If quantities is an array (legacy), sum using stored rate
+            salesEntry.quantities.forEach((qtyObj) => {
+              const qty = parseFloat(qtyObj.quantity) || 0;
+              const rate =
+                typeof qtyObj.rate === "number"
+                  ? qtyObj.rate
+                  : parseFloat(qtyObj.rate) || 0;
+              total += qty * rate;
+            });
+          } else {
+            // If quantities is an object, try to use salesEntry.rate if present (single product sale)
+            const rate =
+              typeof salesEntry.rate === "number"
+                ? salesEntry.rate
+                : parseFloat(salesEntry.rate) || 0;
+            for (const pid in quantities) {
+              const qty = parseFloat(quantities[pid]) || 0;
+              total += qty * rate;
+            }
+          }
+        }
+
         return {
           id: salesEntry.id,
           date: salesEntry.date,
@@ -585,11 +621,7 @@ export default function ProductAndDetail() {
             productId: product.id,
             quantity: quantities[product.id] || "0",
           })),
-          total: products.reduce((sum, product) => {
-            const quantity = parseInt(quantities[product.id]) || 0;
-            const rate = parseFloat(product.rate) || 0;
-            return sum + quantity * rate;
-          }, 0),
+          total,
         };
       }),
     };
