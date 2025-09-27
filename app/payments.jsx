@@ -42,9 +42,12 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 
 // Pagination constants
 const SALES_PAGE_SIZE = 10;
-const PAYMENTS_PAGE_SIZE = 10;
+const PAYMENTS_PAGE_SIZE = 3;
 
 export default function Payments() {
+  // Number of cards to display (pagination for UI)
+  const [displayCount, setDisplayCount] = useState(3);
+  const [waitingForMore, setWaitingForMore] = useState(false);
   const router = useRouter();
   const { shopId } = useLocalSearchParams();
   const [totalEarnings, setTotalEarnings] = useState(0);
@@ -345,16 +348,20 @@ export default function Payments() {
   const validateForm = () => {
     const newErrors = {};
 
-    if (!receivedAmount || !receivedAmount.trim()) {
+    if (
+      receivedAmount === "" ||
+      receivedAmount === null ||
+      receivedAmount === undefined
+    ) {
       newErrors.receivedAmount = "Amount is required";
-    } else if (isNaN(receivedAmount) || parseFloat(receivedAmount) <= 0) {
-      newErrors.receivedAmount = "Please enter a valid positive amount";
+    } else if (isNaN(receivedAmount) || parseFloat(receivedAmount) < 0) {
+      newErrors.receivedAmount = "Please enter a valid amount (0 or more)";
     }
 
-    if (!expenses || !expenses.trim()) {
+    if (expenses === "" || expenses === null || expenses === undefined) {
       newErrors.expenses = "Expenses field is required";
     } else if (isNaN(expenses) || parseFloat(expenses) < 0) {
-      newErrors.expenses = "Please enter a valid expense amount";
+      newErrors.expenses = "Please enter a valid expense amount (0 or more)";
     }
 
     setErrors(newErrors);
@@ -458,6 +465,18 @@ export default function Payments() {
 
     return uniqueResult;
   }, [salesData, payments]);
+
+  // Whenever data changes, reset displayCount if needed
+  useEffect(() => {
+    setDisplayCount((prev) =>
+      Math.max(3, Math.min(prev, combinedPaymentData.length))
+    );
+    // If we were waiting for more, and new data arrived, increase displayCount
+    if (waitingForMore && combinedPaymentData.length > displayCount) {
+      setDisplayCount((prev) => Math.min(prev + 3, combinedPaymentData.length));
+      setWaitingForMore(false);
+    }
+  }, [combinedPaymentData.length]);
 
   // Handle date change
   const handleDateChange = useCallback((event, selectedDate) => {
@@ -628,12 +647,18 @@ export default function Payments() {
   }, [combinedPaymentData]);
 
   const loadMoreCombinedData = useCallback(() => {
-    // Trigger loading more data from both sales and payments if needed
+    // Only set waitingForMore if we need to fetch more from backend
+    let triggered = false;
     if (!loadingMoreSales && hasMoreSales) {
       loadMoreSales();
+      triggered = true;
     }
     if (!loadingMorePayments && hasMorePayments) {
       loadMorePayments();
+      triggered = true;
+    }
+    if (triggered) {
+      setWaitingForMore(true);
     }
   }, [
     loadMoreSales,
@@ -777,6 +802,34 @@ export default function Payments() {
           </Text>
         </Animated.View>
 
+        {/* View All Payments Button - below Total Balance, right aligned, less space */}
+        <View
+          style={{
+            width: "100%",
+            alignItems: "flex-end",
+            marginTop: 1,
+            marginBottom: 1,
+          }}
+        >
+          <TouchableOpacity
+            style={[styles.loadMoreButton, { alignSelf: "flex-end" }]}
+            onPress={() => {
+              console.log("View All Payments pressed, shopId:", shopId);
+              if (router && typeof router.push === "function") {
+                if (shopId) {
+                  router.push(`/payments-history?shopId=${shopId}`);
+                } else {
+                  console.warn(
+                    "shopId is undefined, cannot navigate to payments history"
+                  );
+                }
+              }
+            }}
+          >
+            <Text style={styles.loadMoreButtonText}>View All Payments</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Payments List */}
         <Animated.View
           entering={SlideInDown.delay(300).springify()}
@@ -812,7 +865,7 @@ export default function Payments() {
             )
           ) : (
             <FlatList
-              data={combinedPaymentData}
+              data={combinedPaymentData.slice(0, displayCount)}
               keyExtractor={(item, index) => item.id || `payment-item-${index}`}
               renderItem={({ item, index }) => (
                 <PaymentItem
@@ -835,13 +888,9 @@ export default function Payments() {
                   }}
                 />
               )}
-              onEndReached={loadMoreCombinedData}
-              onEndReachedThreshold={0.5}
               ListFooterComponent={() => {
-                const isLoadingAny = loadingMoreSales || loadingMorePayments;
-                const hasMoreAny = hasMoreSales || hasMorePayments;
-
-                if (isLoadingAny) {
+                // Show spinner if waiting for more data
+                if (waitingForMore) {
                   return (
                     <View style={styles.loadMoreContainer}>
                       <ActivityIndicator size="small" color="#4f46e5" />
@@ -849,7 +898,13 @@ export default function Payments() {
                     </View>
                   );
                 }
-                if (!hasMoreAny && combinedPaymentData.length > 0) {
+                // If all data is shown and no more to fetch
+                if (
+                  !hasMorePayments &&
+                  !hasMoreSales &&
+                  combinedPaymentData.length > 0 &&
+                  displayCount >= combinedPaymentData.length
+                ) {
                   return (
                     <View style={styles.endOfListContainer}>
                       <Text style={styles.endOfListText}>
@@ -1309,6 +1364,20 @@ export default function Payments() {
 }
 
 const styles = StyleSheet.create({
+  loadMoreButton: {
+    backgroundColor: "#6366f1", // Match header color
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: "center",
+    marginVertical: 16,
+    alignSelf: "center",
+  },
+  loadMoreButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
   container: {
     flex: 1,
     backgroundColor: "#f8fafc",
@@ -1343,8 +1412,8 @@ const styles = StyleSheet.create({
   earningsCard: {
     backgroundColor: "#ffffff",
     borderRadius: 20,
-    padding: 24,
-    marginBottom: 30,
+    padding: 20,
+    marginBottom: 10,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
