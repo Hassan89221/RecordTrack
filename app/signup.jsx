@@ -18,7 +18,7 @@ import {
 import { auth } from "../firebase.config";
 import { useRouter } from "expo-router";
 import { db } from "../firebase.config";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import Animated, {
   SlideInDown,
   FadeInUp,
@@ -93,7 +93,7 @@ export default function signup() {
         firstName: firstname,
         lastName: lastname,
         email: email,
-        createdAt: new Date(),
+        createdAt: serverTimestamp(),
       });
 
       // Clear input fields
@@ -135,7 +135,7 @@ export default function signup() {
       {/* Header */}
       <Animated.View
         style={styles.headerSection}
-        entering={FadeInUp.duration(800)}
+        entering={FadeInUp.duration(500)}
       >
         <TouchableOpacity
           style={styles.backButton}
@@ -148,7 +148,7 @@ export default function signup() {
         <View style={styles.logoContainer}>
           <Animated.View
             style={styles.logoIcon}
-            entering={BounceIn.delay(400).duration(1000)}
+            entering={BounceIn.delay(100).duration(500)}
           >
             <MaterialIcons name="analytics" size={32} color="white" />
           </Animated.View>
@@ -164,7 +164,7 @@ export default function signup() {
       >
         <Animated.View
           style={styles.formContainer}
-          entering={SlideInDown.delay(600).duration(800)}
+          entering={SlideInDown.delay(130).duration(500)}
         >
           <View style={styles.formCard}>
             <Text style={styles.welcomeTitle}>Create Account</Text>
@@ -190,7 +190,7 @@ export default function signup() {
             <View style={styles.nameRow}>
               <Animated.View
                 style={[styles.inputGroup, styles.halfWidth]}
-                entering={SlideInRight.delay(800).duration(600)}
+                entering={SlideInRight.delay(160).duration(500)}
               >
                 <Text style={styles.inputLabel}>First Name</Text>
                 <View style={styles.inputContainer}>
@@ -207,7 +207,7 @@ export default function signup() {
 
               <Animated.View
                 style={[styles.inputGroup, styles.halfWidth]}
-                entering={SlideInRight.delay(900).duration(600)}
+                entering={SlideInRight.delay(180).duration(500)}
               >
                 <Text style={styles.inputLabel}>Last Name</Text>
                 <View style={styles.inputContainer}>
@@ -230,7 +230,7 @@ export default function signup() {
             {/* Email Input */}
             <Animated.View
               style={styles.inputGroup}
-              entering={SlideInRight.delay(1000).duration(600)}
+              entering={SlideInRight.delay(200).duration(500)}
             >
               <Text style={styles.inputLabel}>Email Address</Text>
               <View style={styles.inputContainer}>
@@ -250,7 +250,7 @@ export default function signup() {
             {/* Password Input */}
             <Animated.View
               style={styles.inputGroup}
-              entering={SlideInRight.delay(1100).duration(600)}
+              entering={SlideInRight.delay(220).duration(500)}
             >
               <Text style={styles.inputLabel}>Password</Text>
               <View style={styles.inputContainer}>
@@ -279,7 +279,7 @@ export default function signup() {
             {/* Confirm Password Input */}
             <Animated.View
               style={styles.inputGroup}
-              entering={SlideInRight.delay(1200).duration(600)}
+              entering={SlideInRight.delay(240).duration(500)}
             >
               <Text style={styles.inputLabel}>Confirm Password</Text>
               <View style={styles.inputContainer}>
@@ -320,7 +320,7 @@ export default function signup() {
             {!emailSent && (
               <Animated.View
                 style={styles.buttonContainer}
-                entering={BounceIn.delay(1400).duration(800)}
+                entering={BounceIn.delay(260).duration(500)}
               >
                 <TouchableOpacity
                   onPress={handleSignup}
@@ -353,7 +353,7 @@ export default function signup() {
             {/* Login Link */}
             <Animated.View
               style={styles.loginLinkContainer}
-              entering={FadeInUp.delay(1600).duration(600)}
+              entering={FadeInUp.delay(280).duration(500)}
             >
               <Text style={styles.loginText}>Already have an account? </Text>
               <TouchableOpacity onPress={() => router.push(`/login`)}>

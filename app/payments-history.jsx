@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -6,23 +6,55 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from "react-native";
-import { TouchableOpacity, Platform, Modal } from "react-native";
+import { TouchableOpacity, Platform } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { collection, query, orderBy, getDocs } from "firebase/firestore";
+import {
+  collection,
+  query,
+  orderBy,
+  getDocs,
+  where,
+  limit,
+  startAfter,
+} from "firebase/firestore";
 import { db, auth } from "../firebase.config";
 import { useLocalSearchParams } from "expo-router";
 import Head from "./components/head";
+import logger from "./lib/logger";
+
+const PAGE_SIZE = 50;
 
 export default function PaymentsHistory() {
   const { shopId } = useLocalSearchParams();
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [lastVisible, setLastVisible] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
   const [selectedDate, setSelectedDate] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  useEffect(() => {
-    console.log("PaymentsHistory screen loaded, shopId:", shopId);
-  }, [shopId]);
+  // Pre-compute daily totals once (O(n) instead of O(n²))
+  const dailyTotals = useMemo(() => {
+    const totals = {};
+    for (const p of payments) {
+      if (!p.paymentDate) continue;
+      const d = new Date(p.paymentDate);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      totals[key] = (totals[key] || 0) + (p.saleTotal || 0);
+    }
+    return totals;
+  }, [payments]);
+
+  const getTotalSaleForDay = useCallback(
+    (paymentItem) => {
+      if (!paymentItem.paymentDate) return 0;
+      const d = new Date(paymentItem.paymentDate);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      return dailyTotals[key] || 0;
+    },
+    [dailyTotals]
+  );
 
   const fetchPayments = useCallback(async () => {
     if (!shopId) {
@@ -33,15 +65,20 @@ export default function PaymentsHistory() {
     try {
       const paymentsQuery = query(
         collection(db, "shops", shopId, "payments"),
-        orderBy("createdAt", "desc")
+        where("userId", "==", auth.currentUser.uid),
+        orderBy("createdAt", "desc"),
+        limit(PAGE_SIZE)
       );
       const snapshot = await getDocs(paymentsQuery);
-      const userPayments = snapshot.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .filter((payment) => payment.userId === auth.currentUser.uid);
-      setPayments(userPayments);
+      const paymentsList = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setPayments(paymentsList);
+      setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
+      setHasMore(snapshot.docs.length === PAGE_SIZE);
     } catch (error) {
-      console.error("Error fetching payments history:", error);
+      logger.error("Error fetching payments history:", error);
     } finally {
       setLoading(false);
     }
@@ -50,6 +87,32 @@ export default function PaymentsHistory() {
   useEffect(() => {
     fetchPayments();
   }, [fetchPayments]);
+
+  const loadMorePayments = useCallback(async () => {
+    if (loadingMore || !hasMore || !lastVisible) return;
+    setLoadingMore(true);
+    try {
+      const paymentsQuery = query(
+        collection(db, "shops", shopId, "payments"),
+        where("userId", "==", auth.currentUser.uid),
+        orderBy("createdAt", "desc"),
+        startAfter(lastVisible),
+        limit(PAGE_SIZE)
+      );
+      const snapshot = await getDocs(paymentsQuery);
+      const newPayments = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setPayments((prev) => [...prev, ...newPayments]);
+      setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
+      setHasMore(snapshot.docs.length === PAGE_SIZE);
+    } catch (error) {
+      logger.error("Error loading more payments:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [shopId, loadingMore, hasMore, lastVisible]);
 
   // Filter payments by selected date
   const filteredPayments = selectedDate
@@ -63,23 +126,6 @@ export default function PaymentsHistory() {
         );
       })
     : payments;
-
-  // Helper: get total sale for the day of this payment
-  const getTotalSaleForDay = (paymentItem) => {
-    if (!paymentItem.paymentDate) return 0;
-    const itemDate = new Date(paymentItem.paymentDate);
-    return payments
-      .filter((p) => {
-        if (!p.paymentDate) return false;
-        const d = new Date(p.paymentDate);
-        return (
-          d.getFullYear() === itemDate.getFullYear() &&
-          d.getMonth() === itemDate.getMonth() &&
-          d.getDate() === itemDate.getDate()
-        );
-      })
-      .reduce((sum, p) => sum + (p.saleTotal || 0), 0);
-  };
 
   const renderItem = ({ item }) => {
     const totalSaleForDay = getTotalSaleForDay(item);
@@ -117,7 +163,6 @@ export default function PaymentsHistory() {
             </Text>
           </View>
         </View>
-        {/* Total sale for the day */}
         <View style={{ marginTop: 8, alignItems: "flex-end" }}>
           <Text style={{ fontSize: 13, color: "#6366f1", fontWeight: "bold" }}>
             Total Sale for{" "}
@@ -202,6 +247,27 @@ export default function PaymentsHistory() {
             data={filteredPayments}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
+            onEndReached={!selectedDate ? loadMorePayments : null}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={() => {
+              if (loadingMore) {
+                return (
+                  <View style={styles.loadingFooter}>
+                    <ActivityIndicator size="small" color="#4f46e5" />
+                  </View>
+                );
+              }
+              if (!hasMore && payments.length > 0) {
+                return (
+                  <View style={styles.endFooter}>
+                    <Text style={styles.endFooterText}>
+                      All payments loaded
+                    </Text>
+                  </View>
+                );
+              }
+              return null;
+            }}
             contentContainerStyle={{ paddingBottom: 32 }}
           />
         )}
@@ -386,5 +452,17 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: "#888",
     marginTop: 32,
+  },
+  loadingFooter: {
+    paddingVertical: 20,
+    alignItems: "center",
+  },
+  endFooter: {
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  endFooterText: {
+    fontSize: 13,
+    color: "#9ca3af",
   },
 });

@@ -19,6 +19,7 @@ import Animated, {
 import { auth } from "../firebase.config";
 import { onAuthStateChanged } from "firebase/auth";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
+import logger from "./lib/logger";
 
 export default function index() {
   const router = useRouter();
@@ -30,11 +31,11 @@ export default function index() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      if (initializing) setInitializing(false);
+      setInitializing(false);
     });
 
     return unsubscribe; // Cleanup subscription on unmount
-  }, [initializing]);
+  }, []);
 
   const handleGetStarted = () => {
     setIsCheckingAuth(true);
@@ -43,15 +44,15 @@ export default function index() {
     setTimeout(
       () => {
         const currentUser = auth.currentUser;
-        console.log("Current user state:", currentUser);
+        logger.info("Current user state:", currentUser);
 
         setIsCheckingAuth(false);
 
         if (currentUser && currentUser.emailVerified) {
-          console.log("User is authenticated, going to shops");
+          logger.info("User is authenticated, going to shops");
           router.push("/shops");
         } else {
-          console.log("User not authenticated, going to login");
+          logger.info("User not authenticated, going to login");
           router.push("/login");
         }
       },
@@ -73,18 +74,18 @@ export default function index() {
       {/* Header Section */}
       <Animated.View
         style={styles.headerSection}
-        entering={FadeInUp.duration(800)}
+        entering={FadeInUp.duration(500)}
       >
         <View style={styles.logoContainer}>
           <Animated.View
             style={styles.logoIcon}
-            entering={BounceIn.delay(400).duration(1000)}
+            entering={BounceIn.delay(100).duration(500)}
           >
             <MaterialIcons name="analytics" size={40} color="white" />
           </Animated.View>
           <Animated.Text
             style={styles.logoText}
-            entering={SlideInRight.delay(600).duration(800)}
+            entering={SlideInRight.delay(130).duration(500)}
           >
             RecordTrack
           </Animated.Text>
@@ -94,7 +95,7 @@ export default function index() {
       {/* Content Section */}
       <Animated.View
         style={styles.contentSection}
-        entering={SlideInDown.delay(800).duration(800)}
+        entering={SlideInDown.delay(160).duration(500)}
       >
         <Text style={styles.mainTitle}>Welcome to the Future</Text>
         <Text style={styles.subtitle}>
@@ -105,7 +106,7 @@ export default function index() {
         <View style={styles.featuresContainer}>
           <Animated.View
             style={styles.featureItem}
-            entering={SlideInLeft.delay(1200).duration(600)}
+            entering={SlideInLeft.delay(220).duration(500)}
           >
             <Ionicons name="shield-checkmark" size={24} color="#4f46e5" />
             <Text style={styles.featureText}>Secure Storage</Text>
@@ -113,7 +114,7 @@ export default function index() {
 
           <Animated.View
             style={styles.featureItem}
-            entering={SlideInLeft.delay(1400).duration(600)}
+            entering={SlideInLeft.delay(250).duration(500)}
           >
             <Ionicons name="flash" size={24} color="#4f46e5" />
             <Text style={styles.featureText}>Real-time Updates</Text>
@@ -121,7 +122,7 @@ export default function index() {
 
           <Animated.View
             style={styles.featureItem}
-            entering={SlideInLeft.delay(1600).duration(600)}
+            entering={SlideInLeft.delay(280).duration(500)}
           >
             <Ionicons name="trending-up" size={24} color="#4f46e5" />
             <Text style={styles.featureText}>Business Analytics</Text>
@@ -132,7 +133,7 @@ export default function index() {
       {/* Button Section */}
       <Animated.View
         style={styles.buttonContainer}
-        entering={BounceIn.delay(1800).duration(800)}
+        entering={BounceIn.delay(300).duration(500)}
       >
         <TouchableOpacity
           style={[

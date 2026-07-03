@@ -9,6 +9,7 @@ import {
 import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { db, auth } from "../firebase.config";
 import { useLocalSearchParams } from "expo-router";
+import logger from "./lib/logger";
 
 export default function PaymentsHistory() {
   const { shopId } = useLocalSearchParams();
@@ -28,7 +29,7 @@ export default function PaymentsHistory() {
         .filter((payment) => payment.userId === auth.currentUser.uid);
       setPayments(userPayments);
     } catch (error) {
-      console.error("Error fetching payments history:", error);
+      logger.error("Error fetching payments history:", error);
     } finally {
       setLoading(false);
     }

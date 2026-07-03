@@ -19,6 +19,7 @@ import {
   Ionicons,
 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import logger from "../lib/logger";
 
 export default function header() {
   const router = useRouter();
@@ -33,10 +34,10 @@ export default function header() {
       try {
         const auth = getAuth();
         const user = auth.currentUser;
-        console.log("User Info:", user); // Check if user is logged in
+        logger.info("User Info:", user); // Check if user is logged in
 
         if (!user) {
-          console.log("No user logged in.");
+          logger.info("No user logged in.");
           return;
         }
 
@@ -44,13 +45,13 @@ export default function header() {
         const userDoc = await getDoc(userDocRef);
 
         if (userDoc.exists()) {
-          console.log("User Data:", userDoc.data()); // Log fetched data
+          logger.info("User Data:", userDoc.data()); // Log fetched data
           setUserName(userDoc.data().firstName);
         } else {
-          console.log("User document not found in Firestore.");
+          logger.info("User document not found in Firestore.");
         }
       } catch (error) {
-        console.error("Error fetching user name:", error);
+        logger.error("Error fetching user name:", error);
       }
     };
 
@@ -118,7 +119,7 @@ export default function header() {
       // Navigate to welcome screen
       router.replace("/");
     } catch (error) {
-      console.error("Error signing out:", error);
+      logger.error("Error signing out:", error);
       alert("Error logging out. Please try again.");
     }
   };

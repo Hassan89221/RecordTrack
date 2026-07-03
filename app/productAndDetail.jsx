@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, memo } from "react";
 import {
   View,
   Text,
@@ -37,6 +37,7 @@ import {
   limit,
   startAfter,
 } from "firebase/firestore";
+import logger from "./lib/logger";
 
 export default function ProductAndDetail() {
   const router = useRouter();
@@ -71,7 +72,7 @@ export default function ProductAndDetail() {
   const setupProductsListener = useCallback(() => {
     if (!auth.currentUser || !shopId) return;
 
-    console.log("Setting up products real-time listener");
+    logger.info("Setting up products real-time listener");
 
     const productsQuery = query(
       collection(db, "shops", shopId, "products"),
@@ -87,12 +88,12 @@ export default function ProductAndDetail() {
         }));
 
         setProducts(productsList);
-        console.log(
+        logger.info(
           `Real-time products update: ${productsList.length} products`
         );
       },
       (error) => {
-        console.error("Error in products listener:", error);
+        logger.error("Error in products listener:", error);
         Alert.alert("Error", "Failed to sync products. Please refresh.");
       }
     );
@@ -104,23 +105,14 @@ export default function ProductAndDetail() {
   const setupSalesListener = useCallback(() => {
     if (!auth.currentUser || !shopId) return;
 
-    console.log("Setting up sales real-time listener");
+    logger.info("Setting up sales real-time listener");
 
-    // Option 1: Remove userId filter if shop access is already secured
-    // Since users should only access their own shops, we might not need userId filter
     const salesQuery = query(
       collection(db, "shops", shopId, "sales"),
+      where("userId", "==", auth.currentUser.uid),
       orderBy("date", "desc"),
       limit(SALES_PAGE_SIZE)
     );
-
-    // Option 2: Use this version if you create the composite index
-    // const salesQuery = query(
-    //   collection(db, "shops", shopId, "sales"),
-    //   where("userId", "==", auth.currentUser.uid),
-    //   orderBy("date", "desc"),
-    //   limit(SALES_PAGE_SIZE)
-    // );
 
     const unsubscribe = onSnapshot(
       salesQuery,
@@ -138,12 +130,12 @@ export default function ProductAndDetail() {
         setHasMoreSales(snapshot.docs.length === SALES_PAGE_SIZE);
         setInitialLoading(false);
 
-        console.log(
+        logger.info(
           `Real-time sales update: ${salesList.length} sales entries`
         );
       },
       (error) => {
-        console.error("Error in sales listener:", error);
+        logger.error("Error in sales listener:", error);
         Alert.alert("Error", "Failed to sync sales data. Please refresh.");
         setInitialLoading(false);
       }
@@ -158,26 +150,17 @@ export default function ProductAndDetail() {
       return;
     }
 
-    console.log("Loading more sales data...");
+    logger.info("Loading more sales data...");
     setLoadingMoreSales(true);
 
     try {
-      // Option 1: Without userId filter (if shop access is secured)
       const salesQuery = query(
         collection(db, "shops", shopId, "sales"),
+        where("userId", "==", auth.currentUser.uid),
         orderBy("date", "desc"),
         startAfter(salesLastVisible),
         limit(SALES_PAGE_SIZE)
       );
-
-      // Option 2: Use this version if you create the composite index
-      // const salesQuery = query(
-      //   collection(db, "shops", shopId, "sales"),
-      //   where("userId", "==", auth.currentUser.uid),
-      //   orderBy("date", "desc"),
-      //   startAfter(salesLastVisible),
-      //   limit(SALES_PAGE_SIZE)
-      // );
 
       const snapshot = await getDocs(salesQuery);
       const newSalesData = snapshot.docs.map((doc) => ({
@@ -192,13 +175,13 @@ export default function ProductAndDetail() {
         setSalesLastVisible(lastDoc);
         setHasMoreSales(snapshot.docs.length === SALES_PAGE_SIZE);
 
-        console.log(`Loaded ${newSalesData.length} more sales entries`);
+        logger.info(`Loaded ${newSalesData.length} more sales entries`);
       } else {
         setHasMoreSales(false);
-        console.log("No more sales data to load");
+        logger.info("No more sales data to load");
       }
     } catch (error) {
-      console.error("Error loading more sales:", error);
+      logger.error("Error loading more sales:", error);
       Alert.alert("Error", "Failed to load more sales data.");
     } finally {
       setLoadingMoreSales(false);
@@ -230,7 +213,7 @@ export default function ProductAndDetail() {
 
   // Clear form and errors
   const clearForm = useCallback(() => {
-    console.log("clearForm called"); // Debug log
+    logger.info("clearForm called"); // Debug log
     setProductName("");
     setProductRate("");
     setErrors({});
@@ -263,7 +246,7 @@ export default function ProductAndDetail() {
 
   // Save sales data
   const saveSalesData = useCallback(async () => {
-    console.log("Save sales function called"); // Debug log
+    logger.info("Save sales function called"); // Debug log
 
     // Validate date
     if (!salesDate || !salesDate.trim()) {
@@ -316,7 +299,7 @@ export default function ProductAndDetail() {
         );
         await updateDoc(salesRef, salesEntry);
 
-        console.log(
+        logger.info(
           "Sales entry updated in Firebase with ID:",
           editingSalesEntry.id
         );
@@ -372,7 +355,7 @@ export default function ProductAndDetail() {
         // Execute all sales creation promises
         const docRefs = await Promise.all(salesPromises);
 
-        console.log(`Created ${docRefs.length} individual sales records`);
+        logger.info(`Created ${docRefs.length} individual sales records`);
 
         // Also create a consolidated record for the table display
 
@@ -397,7 +380,7 @@ export default function ProductAndDetail() {
           consolidatedEntry
         );
 
-        console.log(
+        logger.info(
           "Sales entry created in Firebase with ID:",
           consolidatedDocRef.id
         );
@@ -412,9 +395,9 @@ export default function ProductAndDetail() {
       clearSalesForm();
       setSalesModalVisible(false);
 
-      console.log("Sales operation completed"); // Debug log
+      logger.info("Sales operation completed"); // Debug log
     } catch (error) {
-      console.error("Error saving sales data:", error);
+      logger.error("Error saving sales data:", error);
       Alert.alert("Error", "Failed to save sales data. Please try again.");
     } finally {
       setLoading(false);
@@ -430,15 +413,15 @@ export default function ProductAndDetail() {
 
   // Start editing a product - open modal with prefilled values
   const startEditingProduct = useCallback((product) => {
-    console.log("startEditingProduct called with:", product); // Debug log
+    logger.info("startEditingProduct called with:", product); // Debug log
 
     if (!product) {
-      console.error("Product is undefined in startEditingProduct");
+      logger.error("Product is undefined in startEditingProduct");
       Alert.alert("Error", "Product not found. Please try again.");
       return;
     }
 
-    console.log("Setting product for editing:", {
+    logger.info("Setting product for editing:", {
       id: product.id,
       name: product.name,
       rate: product.rate,
@@ -452,25 +435,21 @@ export default function ProductAndDetail() {
     // Clear any existing errors
     setErrors({});
 
-    // Use a small timeout to ensure state updates before opening modal
-    setTimeout(() => {
-      console.log("Opening modal for product:", product.name); // Debug log
-      setModalVisible(true);
-    }, 50);
+    setModalVisible(true);
   }, []);
 
   // Add or update product in Firebase
   const addProduct = async () => {
-    console.log("Add/Update product function called"); // Debug log
-    console.log("Form data:", { productName, productRate, editingProduct }); // Debug log
+    logger.info("Add/Update product function called"); // Debug log
+    logger.info("Form data:", { productName, productRate, editingProduct }); // Debug log
 
     if (!validateForm()) {
-      console.log("Form validation failed"); // Debug log
+      logger.info("Form validation failed"); // Debug log
       return;
     }
 
     if (!auth.currentUser || !shopId) {
-      console.log("Auth or shopId missing:", {
+      logger.info("Auth or shopId missing:", {
         user: !!auth.currentUser,
         shopId,
       }); // Debug log
@@ -479,7 +458,7 @@ export default function ProductAndDetail() {
     }
 
     setLoading(true);
-    console.log("Starting to add/update product in Firebase..."); // Debug log
+    logger.info("Starting to add/update product in Firebase..."); // Debug log
 
     try {
       if (editingProduct) {
@@ -493,11 +472,11 @@ export default function ProductAndDetail() {
         );
         await updateDoc(productRef, {
           name: String(productName || "").trim(),
-          rate: String(productRate || "").trim(),
+          rate: parseFloat(productRate) || 0,
           updatedAt: Timestamp.now(),
         });
 
-        console.log("Product updated in Firebase:", editingProduct.id);
+        logger.info("Product updated in Firebase:", editingProduct.id);
 
         // Don't do optimistic update - let the real-time listener handle it
         // The real-time listener will automatically update the state
@@ -509,13 +488,13 @@ export default function ProductAndDetail() {
           collection(db, "shops", shopId, "products"),
           {
             name: String(productName || "").trim(),
-            rate: String(productRate || "").trim(),
+            rate: parseFloat(productRate) || 0,
             userId: auth.currentUser.uid,
             createdAt: Timestamp.now(),
           }
         );
 
-        console.log("Product added successfully with ID:", docRef.id); // Debug log
+        logger.info("Product added successfully with ID:", docRef.id); // Debug log
 
         // Don't do optimistic update - let the real-time listener handle it
         // The real-time listener will automatically add the new product to state
@@ -526,21 +505,21 @@ export default function ProductAndDetail() {
       clearForm();
       setModalVisible(false);
     } catch (error) {
-      console.error("Error adding/updating product:", error);
+      logger.error("Error adding/updating product:", error);
       Alert.alert("Error", "Failed to save product. Please try again.");
     } finally {
       setLoading(false);
-      console.log("Add/Update product process completed"); // Debug log
+      logger.info("Add/Update product process completed"); // Debug log
     }
   };
 
   useEffect(() => {
     if (!auth.currentUser || !shopId) {
-      console.log("Auth or shopId not ready");
+      logger.info("Auth or shopId not ready");
       return;
     }
 
-    console.log("Setting up real-time listeners for shop:", shopId);
+    logger.info("Setting up real-time listeners for shop:", shopId);
     setInitialLoading(true);
 
     // Setup real-time listeners
@@ -549,28 +528,21 @@ export default function ProductAndDetail() {
 
     // Cleanup function
     return () => {
-      console.log("Cleaning up real-time listeners");
+      logger.info("Cleaning up real-time listeners");
       if (unsubscribeProducts) unsubscribeProducts();
       if (unsubscribeSales) unsubscribeSales();
     };
   }, [shopId, setupProductsListener, setupSalesListener]);
 
-  // Debug effect to track modal state
-  useEffect(() => {
-    console.log("Modal visibility changed:", modalVisible);
-    console.log("Current editing product:", editingProduct);
-    console.log("Current product name:", productName);
-    console.log("Current product rate:", productRate);
-  }, [modalVisible, editingProduct, productName, productRate]);
+
 
   // Memoize expensive calculations
   const tableData = useMemo(() => {
     if (products.length === 0) return null;
 
-    // Remove any potential duplicates from salesData
-    const uniqueSalesData = salesData.filter(
-      (salesEntry, index, self) =>
-        index === self.findIndex((entry) => entry.id === salesEntry.id)
+    // Remove any potential duplicates from salesData (O(n) using Map)
+    const uniqueSalesData = Array.from(
+      new Map(salesData.map((entry) => [entry.id, entry])).values()
     );
 
     return {
@@ -645,7 +617,7 @@ export default function ProductAndDetail() {
                   doc(db, "shops", shopId, "sales", salesEntry.id)
                 );
 
-                console.log(
+                logger.info(
                   "Sales entry deleted from Firebase:",
                   salesEntry.id
                 );
@@ -655,7 +627,7 @@ export default function ProductAndDetail() {
 
                 Alert.alert("Success", "Sales entry deleted successfully!");
               } catch (error) {
-                console.error("Error deleting sales entry:", error);
+                logger.error("Error deleting sales entry:", error);
                 Alert.alert(
                   "Error",
                   "Failed to delete sales entry. Please try again."
@@ -671,11 +643,11 @@ export default function ProductAndDetail() {
 
   // Memoize edit handler
   const handleEditSales = useCallback((salesEntry) => {
-    console.log("Edit sales entry:", salesEntry?.id);
+    logger.info("Edit sales entry:", salesEntry?.id);
 
     // Validate salesEntry exists
     if (!salesEntry) {
-      console.error("Sales entry is undefined");
+      logger.error("Sales entry is undefined");
       return;
     }
 
@@ -692,88 +664,30 @@ export default function ProductAndDetail() {
     setSalesModalVisible(true);
   }, []);
 
-  // Memoized Sales Row Component
-  const SalesRow = React.memo(
-    ({ salesEntry, originalSalesEntry, products, onEdit, onDelete }) => {
-      // Safety checks
-      if (!salesEntry || !salesEntry.quantities) {
-        return null;
-      }
-
-      return (
-        <View style={styles.tableRow}>
-          <View style={[styles.tableCell, styles.dateCell]}>
-            <Text style={styles.dateText}>{salesEntry.date || "N/A"}</Text>
-          </View>
-          {salesEntry.quantities.map((qty) => (
-            <View
-              key={`${salesEntry.id}-${qty.productId}`}
-              style={[styles.tableCell, styles.quantityCell]}
-            >
-              <Text style={styles.quantityText}>{qty.quantity || "0"}</Text>
-            </View>
-          ))}
-          {products.length > 0 && (
-            <View style={[styles.tableCell, styles.totalQuantityCell]}>
-              <Text style={styles.totalQuantityText}>
-                ₹{salesEntry.total || 0}
-              </Text>
-            </View>
-          )}
-          {products.length > 0 && (
-            <View style={[styles.tableCell, styles.actionsCell]}>
-              <TouchableOpacity
-                style={styles.editSalesButton}
-                onPress={() => onEdit(originalSalesEntry || salesEntry)}
-              >
-                <Ionicons name="pencil" size={16} color="#059669" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.deleteSalesButton}
-                onPress={() => onDelete(originalSalesEntry || salesEntry)}
-              >
-                <Ionicons name="trash" size={16} color="#ef4444" />
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      );
-    }
-  );
-
   const renderProductTable = () => {
     if (initialLoading) {
       return (
-        <Animated.View
-          entering={FadeInUp.delay(300).springify()}
-          style={styles.loadingContainer}
-        >
+        <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4f46e5" />
           <Text style={styles.loadingText}>Loading your data...</Text>
-        </Animated.View>
+        </View>
       );
     }
 
     if (!tableData) {
       return (
-        <Animated.View
-          entering={FadeInUp.delay(300).springify()}
-          style={styles.emptyStateContainer}
-        >
+        <View style={styles.emptyStateContainer}>
           <Ionicons name="basket-outline" size={60} color="#9ca3af" />
           <Text style={styles.emptyStateText}>No products added yet</Text>
           <Text style={styles.emptyStateSubtext}>
             Tap the + button to add your first product
           </Text>
-        </Animated.View>
+        </View>
       );
     }
 
     return (
-      <Animated.View
-        entering={SlideInDown.delay(200).springify()}
-        style={styles.tableContainer}
-      >
+      <View style={styles.tableFillContainer}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={true}
@@ -804,28 +718,18 @@ export default function ProductAndDetail() {
             {/* Rate Row */}
             <View style={styles.tableRow}>
               <View style={[styles.tableCell, styles.labelCell]}>
-                {/* Empty cell - no text */}
               </View>
               {tableData.rateRow.map((rate) => (
                 <TouchableOpacity
                   key={`rate-${rate.id}`}
                   style={[styles.tableCell, styles.editableCell]}
                   onPress={() => {
-                    console.log("Rate cell clicked for ID:", rate.id);
-                    console.log(
-                      "Available products:",
-                      products.map((p) => ({ id: p.id, name: p.name }))
-                    );
-
                     const productToEdit = products.find(
                       (p) => p.id === rate.id
                     );
-                    console.log("Found product to edit:", productToEdit);
-
                     if (productToEdit) {
                       startEditingProduct(productToEdit);
                     } else {
-                      console.error("Product not found for rate ID:", rate.id);
                       Alert.alert(
                         "Error",
                         "Product not found. Please refresh and try again."
@@ -838,14 +742,12 @@ export default function ProductAndDetail() {
                 </TouchableOpacity>
               ))}
               <View style={[styles.tableCell, styles.totalCell]}>
-                {/* Empty cell - no total calculation in rate row */}
               </View>
               <View style={[styles.tableCell, styles.actionsCell]}>
-                {/* Empty cell - no actions in rate row */}
               </View>
             </View>
 
-            {/* Sales Data Rows with Pagination */}
+            {/* Sales Data Rows with Pagination - now handles its own vertical scrolling */}
             <FlatList
               data={tableData.salesRows}
               keyExtractor={(item, index) => item.id || `sales-row-${index}`}
@@ -890,12 +792,10 @@ export default function ProductAndDetail() {
                 }
                 return null;
               }}
-              scrollEnabled={false} // Disable FlatList scrolling since we're in a ScrollView
-              nestedScrollEnabled={true}
             />
           </View>
         </ScrollView>
-      </Animated.View>
+      </View>
     );
   };
 
@@ -903,56 +803,52 @@ export default function ProductAndDetail() {
     <View style={styles.container}>
       <Head />
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      {/* Fixed header section - doesn't scroll */}
+      <Animated.View
+        entering={SlideInDown.delay(100).springify()}
+        style={styles.headerSection}
       >
-        <Animated.View
-          entering={SlideInDown.delay(100).springify()}
-          style={styles.headerSection}
-        >
-          <Text style={styles.title}>Products & Details</Text>
-          <Text style={styles.subtitle}>Manage your product inventory</Text>
-        </Animated.View>
+        <Text style={styles.title}>Products & Details</Text>
+        <Text style={styles.subtitle}>Manage your product inventory</Text>
+      </Animated.View>
 
-        {/* Payments Button */}
-        <Animated.View
-          entering={SlideInDown.delay(150).springify()}
-          style={styles.paymentsButtonContainer}
+      {/* Payments Button - fixed below header */}
+      <Animated.View
+        entering={SlideInDown.delay(150).springify()}
+        style={styles.paymentsButtonContainer}
+      >
+        <TouchableOpacity
+          style={styles.paymentsButton}
+          onPress={() => {
+            try {
+              router.push(`/payments?shopId=${shopId}`);
+            } catch (error) {
+              logger.error("Navigation error:", error);
+              Alert.alert("Error", "Failed to navigate to payments screen");
+            }
+          }}
+          activeOpacity={0.8}
         >
-          <TouchableOpacity
-            style={styles.paymentsButton}
-            onPress={() => {
-              console.log("Payments button pressed!"); // Debug log
-              console.log("Current shopId:", shopId); // Debug log
-              try {
-                router.push(`/payments?shopId=${shopId}`);
-              } catch (error) {
-                console.error("Navigation error:", error);
-                Alert.alert("Error", "Failed to navigate to payments screen");
-              }
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="card-outline" size={24} color="#ffffff" />
-            <Text style={styles.paymentsButtonText}>Payments</Text>
-            <Ionicons name="arrow-forward" size={20} color="#ffffff" />
-          </TouchableOpacity>
-        </Animated.View>
+          <Ionicons name="card-outline" size={24} color="#ffffff" />
+          <Text style={styles.paymentsButtonText}>Payments</Text>
+          <Ionicons name="arrow-forward" size={20} color="#ffffff" />
+        </TouchableOpacity>
+      </Animated.View>
 
+      {/* Scrollable table area - FlatList handles vertical scroll, horizontal ScrollView handles horizontal */}
+      <View style={styles.scrollableTableArea}>
         {renderProductTable()}
-      </ScrollView>
+      </View>
 
       {/* Fixed Add Buttons at Bottom */}
       <Animated.View
-        entering={BounceIn.delay(400)}
+        entering={BounceIn.delay(300)}
         style={styles.fixedAddButtonContainer}
       >
         <TouchableOpacity
           style={styles.addButton}
           onPress={() => {
-            console.log("Add product button pressed!"); // Debug log
+            logger.info("Add product button pressed!"); // Debug log
             setModalVisible(true);
           }}
           activeOpacity={0.8}
@@ -964,7 +860,7 @@ export default function ProductAndDetail() {
         <TouchableOpacity
           style={styles.salesButton}
           onPress={() => {
-            console.log("Add sales button pressed!"); // Debug log
+            logger.info("Add sales button pressed!"); // Debug log
             setSalesModalVisible(true);
           }}
           activeOpacity={0.8}
@@ -980,7 +876,7 @@ export default function ProductAndDetail() {
         transparent={true}
         visible={modalVisible}
         onRequestClose={() => {
-          console.log("Modal close requested"); // Debug log
+          logger.info("Modal close requested"); // Debug log
           clearForm();
           setModalVisible(false);
         }}
@@ -1001,7 +897,7 @@ export default function ProductAndDetail() {
               </View>
               <TouchableOpacity
                 onPress={() => {
-                  console.log("Close button pressed"); // Debug log
+                  logger.info("Close button pressed"); // Debug log
                   clearForm();
                   setModalVisible(false);
                 }}
@@ -1173,7 +1069,7 @@ export default function ProductAndDetail() {
         transparent={true}
         visible={salesModalVisible}
         onRequestClose={() => {
-          console.log("Sales modal close requested"); // Debug log
+          logger.info("Sales modal close requested"); // Debug log
           clearSalesForm();
           setSalesModalVisible(false);
         }}
@@ -1189,7 +1085,7 @@ export default function ProductAndDetail() {
               </View>
               <TouchableOpacity
                 onPress={() => {
-                  console.log("Sales modal close button pressed"); // Debug log
+                  logger.info("Sales modal close button pressed"); // Debug log
                   clearSalesForm();
                   setSalesModalVisible(false);
                 }}
@@ -1337,13 +1233,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f8fafc",
   },
-  scrollView: {
+  scrollableTableArea: {
     flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
     padding: 20,
-    paddingBottom: 120, // Increased padding to account for fixed buttons (16 + 16 + 34 + extra space)
+    paddingBottom: 120,
+  },
+  tableFillContainer: {
+    flex: 1,
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    overflow: "hidden",
   },
   headerSection: {
     alignItems: "center",
@@ -1966,3 +1870,51 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 });
+
+// Memoized Sales Row Component (module level to enable proper memoization)
+const SalesRow = memo(
+  ({ salesEntry, originalSalesEntry, products, onEdit, onDelete }) => {
+    if (!salesEntry || !salesEntry.quantities) {
+      return null;
+    }
+
+    return (
+      <View style={styles.tableRow}>
+        <View style={[styles.tableCell, styles.dateCell]}>
+          <Text style={styles.dateText}>{salesEntry.date || "N/A"}</Text>
+        </View>
+        {salesEntry.quantities.map((qty) => (
+          <View
+            key={`${salesEntry.id}-${qty.productId}`}
+            style={[styles.tableCell, styles.quantityCell]}
+          >
+            <Text style={styles.quantityText}>{qty.quantity || "0"}</Text>
+          </View>
+        ))}
+        {products.length > 0 && (
+          <View style={[styles.tableCell, styles.totalQuantityCell]}>
+            <Text style={styles.totalQuantityText}>
+              ₹{salesEntry.total || 0}
+            </Text>
+          </View>
+        )}
+        {products.length > 0 && (
+          <View style={[styles.tableCell, styles.actionsCell]}>
+            <TouchableOpacity
+              style={styles.editSalesButton}
+              onPress={() => onEdit(originalSalesEntry || salesEntry)}
+            >
+              <Ionicons name="pencil" size={16} color="#059669" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.deleteSalesButton}
+              onPress={() => onDelete(originalSalesEntry || salesEntry)}
+            >
+              <Ionicons name="trash" size={16} color="#ef4444" />
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  }
+);

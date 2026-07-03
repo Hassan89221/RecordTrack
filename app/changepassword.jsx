@@ -130,7 +130,7 @@ export default function ChangePassword() {
       {/* Header Section (match login) */}
       <Animated.View
         style={styles.headerSection}
-        entering={FadeInUp.duration(800)}
+        entering={FadeInUp.duration(500)}
       >
         <TouchableOpacity
           style={styles.backButton}
@@ -142,7 +142,7 @@ export default function ChangePassword() {
         <View style={styles.logoContainer}>
           <Animated.View
             style={styles.logoIcon}
-            entering={BounceIn.delay(400).duration(1000)}
+            entering={BounceIn.delay(100).duration(500)}
           >
             <MaterialIcons name="analytics" size={32} color="white" />
           </Animated.View>
@@ -153,7 +153,7 @@ export default function ChangePassword() {
       {/* Form Card (match login) */}
       <Animated.View
         style={styles.formContainer}
-        entering={SlideInDown.delay(600).duration(800)}
+        entering={SlideInDown.delay(130).duration(500)}
       >
         <View style={styles.formCard}>
           <Text style={styles.welcomeTitle}>Change Password</Text>
@@ -164,7 +164,7 @@ export default function ChangePassword() {
           {/* Current Password */}
           <Animated.View
             style={styles.inputGroup}
-            entering={SlideInRight.delay(800).duration(600)}
+            entering={SlideInRight.delay(160).duration(500)}
           >
             <Text style={styles.inputLabel}>Current Password</Text>
             <View style={styles.inputContainer}>
@@ -196,7 +196,7 @@ export default function ChangePassword() {
           {/* Forgot Password Link */}
           <Animated.View
             style={styles.forgotContainer}
-            entering={FadeInUp.delay(1200).duration(600)}
+            entering={FadeInUp.delay(240).duration(500)}
           >
             <TouchableOpacity onPress={() => router.push("/forgetpassword")}>
               <Text style={styles.forgotText}>Forgot Password?</Text>
@@ -206,7 +206,7 @@ export default function ChangePassword() {
           {/* New Password */}
           <Animated.View
             style={styles.inputGroup}
-            entering={SlideInRight.delay(1000).duration(600)}
+            entering={SlideInRight.delay(200).duration(500)}
           >
             <Text style={styles.inputLabel}>New Password</Text>
             <View style={styles.inputContainer}>
@@ -236,7 +236,7 @@ export default function ChangePassword() {
           {/* Confirm Password */}
           <Animated.View
             style={styles.inputGroup}
-            entering={SlideInRight.delay(1200).duration(600)}
+            entering={SlideInRight.delay(240).duration(500)}
           >
             <Text style={styles.inputLabel}>Confirm New Password</Text>
             <View style={styles.inputContainer}>
@@ -287,7 +287,7 @@ export default function ChangePassword() {
           {/* Update Button */}
           <Animated.View
             style={styles.buttonContainer}
-            entering={BounceIn.delay(1400).duration(800)}
+            entering={BounceIn.delay(260).duration(500)}
           >
             <TouchableOpacity
               onPress={handleChangePassword}

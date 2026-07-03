@@ -78,7 +78,7 @@ export default function ForgotPassword() {
       {/* Header Section (match login) */}
       <Animated.View
         style={styles.headerSection}
-        entering={FadeInUp.duration(800)}
+        entering={FadeInUp.duration(500)}
       >
         <TouchableOpacity
           style={styles.backButton}
@@ -90,7 +90,7 @@ export default function ForgotPassword() {
         <View style={styles.logoContainer}>
           <Animated.View
             style={styles.logoIcon}
-            entering={BounceIn.delay(400).duration(1000)}
+            entering={BounceIn.delay(100).duration(500)}
           >
             <MaterialIcons name="analytics" size={32} color="white" />
           </Animated.View>
@@ -101,7 +101,7 @@ export default function ForgotPassword() {
       {/* Form Card (match login) */}
       <Animated.View
         style={styles.formCard}
-        entering={SlideInDown.delay(600).duration(800)}
+        entering={SlideInDown.delay(130).duration(500)}
       >
         <Text style={styles.welcomeTitle}>Reset Password</Text>
         <Text style={styles.welcomeSubtitle}>
@@ -111,7 +111,7 @@ export default function ForgotPassword() {
         {/* Email Input */}
         <Animated.View
           style={styles.inputGroup}
-          entering={SlideInRight.delay(800).duration(600)}
+          entering={SlideInRight.delay(160).duration(500)}
         >
           <Text style={styles.inputLabel}>Email Address</Text>
           <View style={styles.inputContainer}>
@@ -150,7 +150,7 @@ export default function ForgotPassword() {
         {/* Reset Button */}
         <Animated.View
           style={styles.buttonContainer}
-          entering={BounceIn.delay(1400).duration(800)}
+          entering={BounceIn.delay(260).duration(500)}
         >
           <TouchableOpacity
             onPress={handleResetPassword}

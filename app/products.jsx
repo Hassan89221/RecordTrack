@@ -7,9 +7,8 @@ import {
   FlatList,
   Modal,
 } from "react-native";
-import React from "react";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AntDesign, FontAwesome, MaterialIcons } from "@expo/vector-icons";
 import Header from "./components/head";
 import {
@@ -23,6 +22,7 @@ import {
 import { db } from "../firebase.config";
 import Animated, { SlideInRight, FadeIn } from "react-native-reanimated";
 import { Alert } from "react-native";
+import logger from "./lib/logger";
 
 export default function products() {
   const router = useRouter();
@@ -31,12 +31,6 @@ export default function products() {
   const [newProduct, setNewProduct] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const [shopName, setShopName] = useState("");
-
-  useEffect(() => {
-    if (shopId) {
-      fetchProducts();
-    }
-  }, [shopId]);
 
   const fetchProducts = async () => {
     const querySnapshot = await getDocs(
@@ -63,7 +57,7 @@ export default function products() {
       setNewProduct("");
       setModalVisible(false);
     } catch (error) {
-      console.error("Error adding product:", error);
+      logger.error("Error adding product:", error);
     }
   };
 
@@ -84,7 +78,7 @@ export default function products() {
               await deleteDoc(doc(db, `shops/${shopId}/products`, id));
               setProducts(products.filter((product) => product.id !== id));
             } catch (error) {
-              console.error("Error deleting product:", error);
+              logger.error("Error deleting product:", error);
             }
           },
         },
@@ -117,26 +111,29 @@ export default function products() {
         {shopName ? `${shopName}'s Products` : " Products"}
       </Text>
       <Animated.FlatList
-        entering={FadeIn.duration(2000)}
+        entering={FadeIn.duration(500)}
         data={products}
-        keyExtractor={(item) => item.id}
+        keyExtractor={useCallback((item) => item.id, [])}
         numColumns={2}
         columnWrapperStyle={styles.row}
-        renderItem={({ item, index }) => (
-          <TouchableOpacity
-            style={[
-              styles.productItem,
-              index % 3 === 0 ? styles.evenRow : styles.oddRow,
-            ]}
-            onPress={() =>
-              router.push(`/sales?shopId=${shopId}&productId=${item.id}`)
-            }
-          >
-            <Text style={styles.productText}>{item.name}</Text>
-            <TouchableOpacity onPress={() => deleteProduct(item.id)}>
-              <MaterialIcons name="delete" size={24} color="red" />
+        renderItem={useCallback(
+          ({ item, index }) => (
+            <TouchableOpacity
+              style={[
+                styles.productItem,
+                index % 3 === 0 ? styles.evenRow : styles.oddRow,
+              ]}
+              onPress={() =>
+                router.push(`/sales?shopId=${shopId}&productId=${item.id}`)
+              }
+            >
+              <Text style={styles.productText}>{item.name}</Text>
+              <TouchableOpacity onPress={() => deleteProduct(item.id)}>
+                <MaterialIcons name="delete" size={24} color="red" />
+              </TouchableOpacity>
             </TouchableOpacity>
-          </TouchableOpacity>
+          ),
+          [shopId]
         )}
       />
 

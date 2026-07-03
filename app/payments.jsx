@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, memo } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
-  ScrollView,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -39,14 +38,15 @@ import Animated, {
   BounceIn,
 } from "react-native-reanimated";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import logger from "./lib/logger";
 
 // Pagination constants
 const SALES_PAGE_SIZE = 10;
-const PAYMENTS_PAGE_SIZE = 3;
+const PAYMENTS_PAGE_SIZE = 5;
 
 export default function Payments() {
   // Number of cards to display (pagination for UI)
-  const [displayCount, setDisplayCount] = useState(3);
+  const [displayCount, setDisplayCount] = useState(5);
   const [waitingForMore, setWaitingForMore] = useState(false);
   const router = useRouter();
   const { shopId } = useLocalSearchParams();
@@ -83,10 +83,11 @@ export default function Payments() {
   const setupSalesListener = useCallback(() => {
     if (!auth.currentUser || !shopId) return;
 
-    console.log("Setting up sales real-time listener");
+    logger.info("Setting up sales real-time listener");
 
     const salesQuery = query(
       collection(db, "shops", shopId, "sales"),
+      where("userId", "==", auth.currentUser.uid),
       orderBy("date", "desc"),
       limit(SALES_PAGE_SIZE)
     );
@@ -99,12 +100,7 @@ export default function Payments() {
           ...doc.data(),
         }));
 
-        // Filter by user ID locally if needed (to avoid index requirement)
-        const userSales = salesList.filter(
-          (sale) => sale.userId === auth.currentUser.uid
-        );
-
-        setSalesData(userSales);
+        setSalesData(salesList);
 
         // Set pagination state
         const lastDoc = snapshot.docs[snapshot.docs.length - 1];
@@ -112,12 +108,12 @@ export default function Payments() {
         setHasMoreSales(snapshot.docs.length === SALES_PAGE_SIZE);
         setInitialLoading(false);
 
-        console.log(
-          `Real-time sales update: ${userSales.length} sales entries`
+        logger.info(
+          `Real-time sales update: ${salesList.length} sales entries`
         );
       },
       (error) => {
-        console.error("Error in sales listener:", error);
+        logger.error("Error in sales listener:", error);
         setInitialLoading(false);
       }
     );
@@ -129,10 +125,11 @@ export default function Payments() {
   const setupPaymentsListener = useCallback(() => {
     if (!auth.currentUser || !shopId) return;
 
-    console.log("Setting up payments real-time listener");
+    logger.info("Setting up payments real-time listener");
 
     const paymentsQuery = query(
       collection(db, "shops", shopId, "payments"),
+      where("userId", "==", auth.currentUser.uid),
       orderBy("createdAt", "desc"),
       limit(PAYMENTS_PAGE_SIZE)
     );
@@ -145,24 +142,19 @@ export default function Payments() {
           ...doc.data(),
         }));
 
-        // Filter by user ID locally (to avoid index requirement)
-        const userPayments = paymentsList.filter(
-          (payment) => payment.userId === auth.currentUser.uid
-        );
-
-        setPayments(userPayments);
+        setPayments(paymentsList);
 
         // Set pagination state for payments
         const lastDoc = snapshot.docs[snapshot.docs.length - 1];
         setPaymentsLastVisible(lastDoc);
         setHasMorePayments(snapshot.docs.length === PAYMENTS_PAGE_SIZE);
 
-        console.log(
-          `Real-time payments update: ${userPayments.length} payments`
+        logger.info(
+          `Real-time payments update: ${paymentsList.length} payments`
         );
       },
       (error) => {
-        console.error("Error in payments listener:", error);
+        logger.error("Error in payments listener:", error);
       }
     );
 
@@ -175,12 +167,13 @@ export default function Payments() {
       return;
     }
 
-    console.log("Loading more sales data...");
+    logger.info("Loading more sales data...");
     setLoadingMoreSales(true);
 
     try {
       const salesQuery = query(
         collection(db, "shops", shopId, "sales"),
+        where("userId", "==", auth.currentUser.uid),
         orderBy("date", "desc"),
         startAfter(salesLastVisible),
         limit(SALES_PAGE_SIZE)
@@ -192,39 +185,26 @@ export default function Payments() {
         ...doc.data(),
       }));
 
-      // Filter by user ID locally
-      const userSales = newSalesData.filter(
-        (sale) => sale.userId === auth.currentUser.uid
-      );
-
       if (newSalesData.length > 0) {
         // Add to existing sales data, but ensure no duplicates
         setSalesData((prev) => {
           const existingIds = new Set(prev.map((item) => item.id));
-          const newUniqueSales = userSales.filter(
-            (sale) => !existingIds.has(sale.id)
-          );
-          return [...prev, ...newUniqueSales];
+          return [...prev, ...newSalesData.filter(s => !existingIds.has(s.id))];
         });
 
         const lastDoc = snapshot.docs[snapshot.docs.length - 1];
         setSalesLastVisible(lastDoc);
         setHasMoreSales(snapshot.docs.length === SALES_PAGE_SIZE);
 
-        console.log(
-          `Loaded ${userSales.length} more sales entries (${
-            userSales.filter(
-              (sale, index, self) =>
-                index === self.findIndex((s) => s.id === sale.id)
-            ).length
-          } unique)`
+        logger.info(
+          `Loaded ${newSalesData.length} more sales entries`
         );
       } else {
         setHasMoreSales(false);
-        console.log("No more sales data to load");
+        logger.info("No more sales data to load");
       }
     } catch (error) {
-      console.error("Error loading more sales:", error);
+      logger.error("Error loading more sales:", error);
     } finally {
       setLoadingMoreSales(false);
     }
@@ -236,12 +216,13 @@ export default function Payments() {
       return;
     }
 
-    console.log("Loading more payments data...");
+    logger.info("Loading more payments data...");
     setLoadingMorePayments(true);
 
     try {
       const paymentsQuery = query(
         collection(db, "shops", shopId, "payments"),
+        where("userId", "==", auth.currentUser.uid),
         orderBy("createdAt", "desc"),
         startAfter(paymentsLastVisible),
         limit(PAYMENTS_PAGE_SIZE)
@@ -253,39 +234,26 @@ export default function Payments() {
         ...doc.data(),
       }));
 
-      // Filter by user ID locally
-      const userPayments = newPaymentsData.filter(
-        (payment) => payment.userId === auth.currentUser.uid
-      );
-
       if (newPaymentsData.length > 0) {
         // Add to existing payments data, but ensure no duplicates
         setPayments((prev) => {
           const existingIds = new Set(prev.map((item) => item.id));
-          const newUniquePayments = userPayments.filter(
-            (payment) => !existingIds.has(payment.id)
-          );
-          return [...prev, ...newUniquePayments];
+          return [...prev, ...newPaymentsData.filter(p => !existingIds.has(p.id))];
         });
 
         const lastDoc = snapshot.docs[snapshot.docs.length - 1];
         setPaymentsLastVisible(lastDoc);
         setHasMorePayments(snapshot.docs.length === PAYMENTS_PAGE_SIZE);
 
-        console.log(
-          `Loaded ${userPayments.length} more payments (${
-            userPayments.filter(
-              (payment, index, self) =>
-                index === self.findIndex((p) => p.id === payment.id)
-            ).length
-          } unique)`
+        logger.info(
+          `Loaded ${newPaymentsData.length} more payments`
         );
       } else {
         setHasMorePayments(false);
-        console.log("No more payments data to load");
+        logger.info("No more payments data to load");
       }
     } catch (error) {
-      console.error("Error loading more payments:", error);
+      logger.error("Error loading more payments:", error);
     } finally {
       setLoadingMorePayments(false);
     }
@@ -295,7 +263,7 @@ export default function Payments() {
   useEffect(() => {
     if (!auth.currentUser || !shopId) return;
 
-    console.log("Setting up real-time listeners for payments screen");
+    logger.info("Setting up real-time listeners for payments screen");
     setInitialLoading(true);
 
     // Setup shop listener for total earnings
@@ -324,12 +292,12 @@ export default function Payments() {
         });
 
         // Store products map for calculations (you might want to add this to state)
-        console.log(
+        logger.info(
           "Products loaded for calculations:",
           Object.keys(productsMap).length
         );
       } catch (error) {
-        console.error("Error fetching products:", error);
+        logger.error("Error fetching products:", error);
       }
     };
 
@@ -337,7 +305,7 @@ export default function Payments() {
 
     // Cleanup function
     return () => {
-      console.log("Cleaning up payments screen listeners");
+      logger.info("Cleaning up payments screen listeners");
       if (unsubscribeShop) unsubscribeShop();
       if (unsubscribeSales) unsubscribeSales();
       if (unsubscribePayments) unsubscribePayments();
@@ -379,20 +347,10 @@ export default function Payments() {
 
   // Create combined payment data for display with real-time calculation
   const combinedPaymentData = useMemo(() => {
-    // Remove any potential duplicates from salesData first
-    const uniqueSalesData = salesData.filter(
-      (salesEntry, index, self) =>
-        index === self.findIndex((entry) => entry.id === salesEntry.id)
+    // Deduplicate salesData and payments using O(n) Map
+    const uniqueSalesData = Array.from(
+      new Map(salesData.map((entry) => [entry.id, entry])).values()
     );
-
-    // Debug logging
-    if (salesData.length !== uniqueSalesData.length) {
-      console.log(
-        `Removed ${
-          salesData.length - uniqueSalesData.length
-        } duplicate sales entries`
-      );
-    }
 
     // Calculate totals for each sales entry in real-time
     const salesWithTotals = uniqueSalesData
@@ -407,20 +365,10 @@ export default function Payments() {
       })
       .filter(Boolean);
 
-    // Also remove duplicates from payments data
-    const uniquePayments = payments.filter(
-      (payment, index, self) =>
-        index === self.findIndex((entry) => entry.id === payment.id)
+    // Deduplicate payments using O(n) Map
+    const uniquePayments = Array.from(
+      new Map(payments.map((entry) => [entry.id, entry])).values()
     );
-
-    // Debug logging
-    if (payments.length !== uniquePayments.length) {
-      console.log(
-        `Removed ${
-          payments.length - uniquePayments.length
-        } duplicate payment entries`
-      );
-    }
 
     const result = salesWithTotals
       .map((sale) => {
@@ -449,19 +397,10 @@ export default function Payments() {
       })
       .filter(Boolean); // Remove any null entries
 
-    // Final duplicate check
-    const uniqueResult = result.filter(
-      (item, index, self) =>
-        index === self.findIndex((entry) => entry.id === item.id)
+    // Final deduplication using O(n) Map
+    const uniqueResult = Array.from(
+      new Map(result.map((item) => [item.id, item])).values()
     );
-
-    if (result.length !== uniqueResult.length) {
-      console.log(
-        `Removed ${
-          result.length - uniqueResult.length
-        } duplicate combined entries`
-      );
-    }
 
     return uniqueResult;
   }, [salesData, payments]);
@@ -469,11 +408,11 @@ export default function Payments() {
   // Whenever data changes, reset displayCount if needed
   useEffect(() => {
     setDisplayCount((prev) =>
-      Math.max(3, Math.min(prev, combinedPaymentData.length))
+      Math.max(5, Math.min(prev, combinedPaymentData.length))
     );
     // If we were waiting for more, and new data arrived, increase displayCount
     if (waitingForMore && combinedPaymentData.length > displayCount) {
-      setDisplayCount((prev) => Math.min(prev + 3, combinedPaymentData.length));
+      setDisplayCount((prev) => Math.min(prev + 5, combinedPaymentData.length));
       setWaitingForMore(false);
     }
   }, [combinedPaymentData.length]);
@@ -525,7 +464,7 @@ export default function Payments() {
         createdAt: Timestamp.now(),
       });
 
-      console.log("Payment recorded successfully in Firebase");
+      logger.info("Payment recorded successfully in Firebase");
 
       // Don't do optimistic updates - let the real-time listener handle it
       // The real-time listener will automatically add the new payment to state
@@ -535,7 +474,7 @@ export default function Payments() {
       setSelectedSale(null);
       Alert.alert("Success", "Payment recorded successfully!");
     } catch (error) {
-      console.error("Error saving payment:", error);
+      logger.error("Error saving payment:", error);
       Alert.alert("Error", "Failed to save payment. Please try again.");
     } finally {
       setLoading(false);
@@ -568,14 +507,14 @@ export default function Payments() {
                 );
               }
 
-              console.log("Entry deleted successfully from Firebase");
+              logger.info("Entry deleted successfully from Firebase");
 
               // Don't do optimistic updates - let the real-time listener handle it
               // The real-time listeners will automatically remove the entries from state
 
               Alert.alert("Success", "Entry deleted completely!");
             } catch (error) {
-              console.error("Error deleting entry:", error);
+              logger.error("Error deleting entry:", error);
               Alert.alert("Error", "Failed to delete entry. Please try again.");
             }
           },
@@ -622,7 +561,7 @@ export default function Payments() {
         totalEarnings: newTotalEarnings,
       });
 
-      console.log("Payment updated successfully in Firebase");
+      logger.info("Payment updated successfully in Firebase");
 
       // Don't do optimistic updates - let the real-time listener handle it
       // The real-time listener will automatically update the payment state
@@ -634,17 +573,12 @@ export default function Payments() {
       setEditModalVisible(false);
       Alert.alert("Success", "Payment updated successfully!");
     } catch (error) {
-      console.error("Error updating payment:", error);
+      logger.error("Error updating payment:", error);
       Alert.alert("Error", "Failed to update payment. Please try again.");
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    // Remove the old pagination logic since we're using real-time listeners with pagination
-    // The combinedPaymentData will be managed by the real-time listeners
-  }, [combinedPaymentData]);
 
   const loadMoreCombinedData = useCallback(() => {
     // Only set waitingForMore if we need to fetch more from backend
@@ -669,262 +603,161 @@ export default function Payments() {
     hasMorePayments,
   ]);
 
-  // Memoized Payment Item Component
-  const PaymentItem = React.memo(
-    ({ item, index, onEdit, onDelete, onAddPayment }) => (
+  // Stable edit/delete/addPayment handlers
+  const handleEditPaymentItem = useCallback((item) => {
+    if (item && item.payment) {
+      setEditingPayment(item.payment);
+      setSelectedSale(item.sale);
+      setReceivedAmount(item.payment.amountReceived.toString());
+      setExpenses(item.payment.expensesNum.toString());
+      setDate(new Date(item.payment.paymentDate));
+      setEditModalVisible(true);
+    }
+  }, []);
+
+  const handleDeletePaymentItem = useCallback((payment) => {
+    handleDeletePayment(payment);
+  }, [handleDeletePayment]);
+
+  const handleAddPaymentItem = useCallback((sale) => {
+    setSelectedSale(sale);
+    setModalVisible(true);
+  }, []);
+
+  const renderPaymentItem = useCallback(
+    ({ item, index }) => (
+      <PaymentItem
+        item={item}
+        index={index}
+        onEdit={handleEditPaymentItem}
+        onDelete={handleDeletePaymentItem}
+        onAddPayment={handleAddPaymentItem}
+      />
+    ),
+    [handleEditPaymentItem, handleDeletePaymentItem, handleAddPaymentItem]
+  );
+
+  const listHeader = (
+    <>
+      {/* Header Section */}
       <Animated.View
-        entering={FadeInUp.delay(index * 50).springify()}
-        style={styles.paymentItem}
+        entering={SlideInDown.delay(100).springify()}
+        style={styles.headerSection}
       >
-        <View style={styles.paymentContent}>
-          <View style={styles.paymentHeader}>
-            <View style={styles.dateContainer}>
-              <Ionicons name="calendar-outline" size={16} color="#6b7280" />
-              <Text style={styles.paymentDate}>
-                {new Date(item.date).toLocaleDateString("en-IN")}
-              </Text>
-            </View>
-            <Text style={styles.productName} numberOfLines={1}>
-              {item.productName}
-            </Text>
-            <View style={styles.paymentActions}>
-              {item.hasPayment ? (
-                <>
-                  <TouchableOpacity
-                    style={styles.editButton}
-                    onPress={onEdit}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="pencil" size={16} color="#059669" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={onDelete}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="trash" size={16} color="#ef4444" />
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <TouchableOpacity
-                  style={styles.addPaymentButton}
-                  onPress={onAddPayment}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="add-circle" size={16} color="#3b82f6" />
-                  <Text style={styles.addPaymentText}>Add Payment</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-
-          <View style={styles.paymentDetails}>
-            <View style={styles.amountRow}>
-              <View style={styles.amountItem}>
-                <Text style={styles.amountLabel}>Total</Text>
-                <Text style={styles.totalValue}>
-                  ₹ {item.total.toLocaleString("en-IN")}
-                </Text>
-              </View>
-              <View style={styles.amountItem}>
-                <Text style={styles.amountLabel}>Received</Text>
-                <Text style={styles.amountValue}>
-                  ₹ {item.received.toLocaleString("en-IN")}
-                </Text>
-              </View>
-              <View style={styles.amountItem}>
-                <Text style={styles.amountLabel}>Expenses</Text>
-                <Text style={styles.expenseValue}>
-                  ₹ {item.expense.toLocaleString("en-IN")}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Due Amount</Text>
-              <Text
-                style={[
-                  styles.dueAmountValue,
-                  { color: item.dueAmount >= 0 ? "#059669" : "#ef4444" },
-                ]}
-              >
-                ₹ {Math.abs(item.dueAmount).toLocaleString("en-IN")}
-                {item.dueAmount < 0 && " (Outstanding)"}
-              </Text>
-            </View>
-          </View>
-        </View>
+        <Text style={styles.title}>Payment Management</Text>
+        <Text style={styles.subtitle}>{shopName}</Text>
       </Animated.View>
-    )
+
+      {/* Total Earnings Card */}
+      <Animated.View
+        entering={FadeInUp.delay(200).springify()}
+        style={styles.earningsCard}
+      >
+        <View style={styles.earningsHeader}>
+          <Ionicons name="wallet-outline" size={24} color="#059669" />
+          <Text style={styles.earningsTitle}>Total Balance</Text>
+        </View>
+        <Text
+          style={[
+            styles.earningsAmount,
+            { color: totalEarnings >= 0 ? "#059669" : "#ef4444" },
+          ]}
+        >
+          ₹{" "}
+          {Math.abs(totalEarnings).toLocaleString("en-IN", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
+        </Text>
+        <Text style={styles.earningsStatus}>
+          {totalEarnings >= 0 ? "Available Balance" : "Outstanding Amount"}
+        </Text>
+      </Animated.View>
+
+      {/* View All Payments Button */}
+      <View style={styles.viewAllButtonContainer}>
+        <TouchableOpacity
+          style={[styles.loadMoreButton, { alignSelf: "flex-end" }]}
+          onPress={() => {
+            if (shopId) {
+              router.push(`/payments-history?shopId=${shopId}`);
+            }
+          }}
+        >
+          <Text style={styles.loadMoreButtonText}>View All Payments</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Section Header */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Sales & Payments</Text>
+        <Text style={styles.paymentCount}>
+          {combinedPaymentData.length} entries
+        </Text>
+      </View>
+    </>
   );
 
   return (
     <View style={styles.container}>
       <Head />
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header Section */}
-        <Animated.View
-          entering={SlideInDown.delay(100).springify()}
-          style={styles.headerSection}
-        >
-          <Text style={styles.title}>Payment Management</Text>
-          <Text style={styles.subtitle}>{shopName}</Text>
-        </Animated.View>
-
-        {/* Total Earnings Card */}
-        <Animated.View
-          entering={FadeInUp.delay(200).springify()}
-          style={styles.earningsCard}
-        >
-          <View style={styles.earningsHeader}>
-            <Ionicons name="wallet-outline" size={24} color="#059669" />
-            <Text style={styles.earningsTitle}>Total Balance</Text>
-          </View>
-          <Text
-            style={[
-              styles.earningsAmount,
-              { color: totalEarnings >= 0 ? "#059669" : "#ef4444" },
-            ]}
-          >
-            ₹{" "}
-            {Math.abs(totalEarnings).toLocaleString("en-IN", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}
-          </Text>
-          <Text style={styles.earningsStatus}>
-            {totalEarnings >= 0 ? "Available Balance" : "Outstanding Amount"}
-          </Text>
-        </Animated.View>
-
-        {/* View All Payments Button - below Total Balance, right aligned, less space */}
-        <View
-          style={{
-            width: "100%",
-            alignItems: "flex-end",
-            marginTop: 1,
-            marginBottom: 1,
-          }}
-        >
-          <TouchableOpacity
-            style={[styles.loadMoreButton, { alignSelf: "flex-end" }]}
-            onPress={() => {
-              console.log("View All Payments pressed, shopId:", shopId);
-              if (router && typeof router.push === "function") {
-                if (shopId) {
-                  router.push(`/payments-history?shopId=${shopId}`);
-                } else {
-                  console.warn(
-                    "shopId is undefined, cannot navigate to payments history"
-                  );
-                }
-              }
-            }}
-          >
-            <Text style={styles.loadMoreButtonText}>View All Payments</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Payments List */}
-        <Animated.View
-          entering={SlideInDown.delay(300).springify()}
-          style={styles.paymentsSection}
-        >
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Sales & Payments</Text>
-            <Text style={styles.paymentCount}>
-              {combinedPaymentData.length} entries
-            </Text>
-          </View>
-
-          {combinedPaymentData.length === 0 ? (
-            initialLoading ? (
-              <Animated.View
-                entering={FadeInUp.delay(400).springify()}
-                style={styles.loadingContainer}
-              >
-                <ActivityIndicator size="large" color="#4f46e5" />
-                <Text style={styles.loadingText}>Loading payments data...</Text>
-              </Animated.View>
-            ) : (
-              <Animated.View
-                entering={FadeInUp.delay(400).springify()}
-                style={styles.emptyState}
-              >
-                <Ionicons name="receipt-outline" size={60} color="#9ca3af" />
-                <Text style={styles.emptyStateText}>No sales data found</Text>
-                <Text style={styles.emptyStateSubtext}>
-                  Add some sales first to manage payments
-                </Text>
-              </Animated.View>
-            )
+      {combinedPaymentData.length === 0 ? (
+        <View style={styles.emptyScrollContainer}>
+          {listHeader}
+          {initialLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#4f46e5" />
+              <Text style={styles.loadingText}>Loading payments data...</Text>
+            </View>
           ) : (
-            <FlatList
-              data={combinedPaymentData.slice(0, displayCount)}
-              keyExtractor={(item, index) => item.id || `payment-item-${index}`}
-              renderItem={({ item, index }) => (
-                <PaymentItem
-                  item={item}
-                  index={index}
-                  onEdit={() => {
-                    if (item.payment) {
-                      setEditingPayment(item.payment);
-                      setSelectedSale(item.sale);
-                      setReceivedAmount(item.payment.amountReceived.toString());
-                      setExpenses(item.payment.expensesNum.toString());
-                      setDate(new Date(item.payment.paymentDate));
-                      setEditModalVisible(true);
-                    }
-                  }}
-                  onDelete={() => handleDeletePayment(item.payment)}
-                  onAddPayment={() => {
-                    setSelectedSale(item.sale);
-                    setModalVisible(true);
-                  }}
-                />
-              )}
-              ListFooterComponent={() => {
-                // Show spinner if waiting for more data
-                if (waitingForMore) {
-                  return (
-                    <View style={styles.loadMoreContainer}>
-                      <ActivityIndicator size="small" color="#4f46e5" />
-                      <Text style={styles.loadMoreText}>Loading more...</Text>
-                    </View>
-                  );
-                }
-                // If all data is shown and no more to fetch
-                if (
-                  !hasMorePayments &&
-                  !hasMoreSales &&
-                  combinedPaymentData.length > 0 &&
-                  displayCount >= combinedPaymentData.length
-                ) {
-                  return (
-                    <View style={styles.endOfListContainer}>
-                      <Text style={styles.endOfListText}>
-                        You've reached the end
-                      </Text>
-                    </View>
-                  );
-                }
-                return null;
-              }}
-              scrollEnabled={false}
-              nestedScrollEnabled={true}
-            />
+            <View style={styles.emptyState}>
+              <Ionicons name="receipt-outline" size={60} color="#9ca3af" />
+              <Text style={styles.emptyStateText}>No sales data found</Text>
+              <Text style={styles.emptyStateSubtext}>
+                Add some sales first to manage payments
+              </Text>
+            </View>
           )}
-        </Animated.View>
-      </ScrollView>
+        </View>
+      ) : (
+        <FlatList
+          data={combinedPaymentData.slice(0, displayCount)}
+          keyExtractor={(item, index) => item.id || `payment-item-${index}`}
+          ListHeaderComponent={listHeader}
+          renderItem={renderPaymentItem}
+          ListFooterComponent={() => {
+            if (waitingForMore) {
+              return (
+                <View style={styles.loadMoreContainer}>
+                  <ActivityIndicator size="small" color="#4f46e5" />
+                  <Text style={styles.loadMoreText}>Loading more...</Text>
+                </View>
+              );
+            }
+            if (
+              !hasMorePayments &&
+              !hasMoreSales &&
+              combinedPaymentData.length > 0 &&
+              displayCount >= combinedPaymentData.length
+            ) {
+              return (
+                <View style={styles.endOfListContainer}>
+                  <Text style={styles.endOfListText}>
+                    You've reached the end
+                  </Text>
+                </View>
+              );
+            }
+            return null;
+          }}
+          contentContainerStyle={styles.scrollContent}
+        />
+      )}
 
       {/* Add Payment Modal */}
       <Modal
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         visible={modalVisible}
         onRequestClose={() => {
@@ -1143,7 +976,7 @@ export default function Payments() {
 
       {/* Edit Payment Modal */}
       <Modal
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         visible={editModalVisible}
         onRequestClose={() => {
@@ -1382,13 +1215,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f8fafc",
   },
-  scrollView: {
-    flex: 1,
-  },
   scrollContent: {
-    flexGrow: 1,
     padding: 20,
     paddingBottom: 100,
+  },
+  emptyScrollContainer: {
+    flex: 1,
+    padding: 20,
+    paddingBottom: 100,
+  },
+  viewAllButtonContainer: {
+    width: "100%",
+    alignItems: "flex-end",
+    marginTop: 1,
+    marginBottom: 1,
   },
   headerSection: {
     alignItems: "center",
@@ -1860,3 +1700,91 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
+
+const PaymentItem = memo(
+  ({ item, index, onEdit, onDelete, onAddPayment }) => (
+    <Animated.View
+      entering={FadeInUp.delay(index * 50).springify()}
+      style={styles.paymentItem}
+    >
+      <View style={styles.paymentContent}>
+        <View style={styles.paymentHeader}>
+          <View style={styles.dateContainer}>
+            <Ionicons name="calendar-outline" size={16} color="#6b7280" />
+            <Text style={styles.paymentDate}>
+              {new Date(item.date).toLocaleDateString("en-IN")}
+            </Text>
+          </View>
+          <Text style={styles.productName} numberOfLines={1}>
+            {item.productName}
+          </Text>
+          <View style={styles.paymentActions}>
+            {item.hasPayment ? (
+              <>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => onEdit(item)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="pencil" size={16} color="#059669" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => onDelete(item.payment)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="trash" size={16} color="#ef4444" />
+                </TouchableOpacity>
+              </>
+            ) : (
+              <TouchableOpacity
+                style={styles.addPaymentButton}
+                onPress={() => onAddPayment(item.sale)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add-circle" size={16} color="#3b82f6" />
+                <Text style={styles.addPaymentText}>Add Payment</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.paymentDetails}>
+          <View style={styles.amountRow}>
+            <View style={styles.amountItem}>
+              <Text style={styles.amountLabel}>Total</Text>
+              <Text style={styles.totalValue}>
+                ₹ {item.total.toLocaleString("en-IN")}
+              </Text>
+            </View>
+            <View style={styles.amountItem}>
+              <Text style={styles.amountLabel}>Received</Text>
+              <Text style={styles.amountValue}>
+                ₹ {item.received.toLocaleString("en-IN")}
+              </Text>
+            </View>
+            <View style={styles.amountItem}>
+              <Text style={styles.amountLabel}>Expenses</Text>
+              <Text style={styles.expenseValue}>
+                ₹ {item.expense.toLocaleString("en-IN")}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Due Amount</Text>
+            <Text
+              style={[
+                styles.dueAmountValue,
+                { color: item.dueAmount >= 0 ? "#059669" : "#ef4444" },
+              ]}
+            >
+              ₹ {Math.abs(item.dueAmount).toLocaleString("en-IN")}
+              {item.dueAmount < 0 && " (Outstanding)"}
+            </Text>
+          </View>
+        </View>
+      </View>
+    </Animated.View>
+  )
+);

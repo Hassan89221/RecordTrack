@@ -4,14 +4,13 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  FlatList,
   Modal,
   ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { FontAwesome } from "@expo/vector-icons";
 import { AntDesign } from "@expo/vector-icons";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo, memo } from "react";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { db } from "../firebase.config";
 import Header from "./components/head";
@@ -28,6 +27,7 @@ import {
 } from "firebase/firestore";
 import Animated, { SlideInDown, SlideInRight } from "react-native-reanimated";
 import { Alert } from "react-native";
+import logger from "./lib/logger";
 
 const ITEMS_PER_PAGE = 10;
 export default function sales() {
@@ -42,7 +42,6 @@ export default function sales() {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEditingRate, setIsEditingRate] = useState(false);
   const [productName, setProductName] = useState("");
-  const [displayedData, setDisplayedData] = useState([]);
   const [page, setPage] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
 
@@ -65,7 +64,7 @@ export default function sales() {
       }));
       setSalesData(salesList);
     } catch (error) {
-      console.error("Error fetching sales data:", error);
+      logger.error("Error fetching sales data:", error);
     }
   };
 
@@ -79,7 +78,7 @@ export default function sales() {
         setProductName(productSnapshot.data().name || "");
       }
     } catch (error) {
-      console.error("Error fetching product rate:", error);
+      logger.error("Error fetching product rate:", error);
     }
   };
 
@@ -95,13 +94,13 @@ export default function sales() {
       await updateDoc(productRef, { rate: parseFloat(rate) });
       setIsEditingRate(false);
     } catch (error) {
-      console.error("Error updating product rate:", error);
+      logger.error("Error updating product rate:", error);
     }
   };
 
   const addOrUpdateSale = async () => {
     if (!shopId || !productId || !date || !rate || !quantity) {
-      console.log("Missing required fields:", {
+      logger.info("Missing required fields:", {
         shopId,
         productId,
         date,
@@ -181,79 +180,82 @@ export default function sales() {
       setModalVisible(false);
       fetchSales(); // Refresh the list after adding
     } catch (error) {
-      console.error("Error adding/updating sale:", error);
+      logger.error("Error adding/updating sale:", error);
     }
   };
 
-  const handleDeleteSale = async (id) => {
-    if (!shopId || !productId) return;
+  const handleDeleteSale = useCallback(
+    async (id) => {
+      if (!shopId || !productId) return;
 
-    const sale = salesData.find((s) => s.id === id);
-    if (!sale) {
-      console.error("Sale not found for ID:", id);
-      return;
-    }
+      const sale = salesData.find((s) => s.id === id);
+      if (!sale) {
+        logger.error("Sale not found for ID:", id);
+        return;
+      }
 
-    Alert.alert(
-      "Delete Sale",
-      "What would you like to do with this sale?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteDoc(
-                doc(db, "shops", shopId, "products", productId, "sales", id)
-              );
-              setSalesData((prev) => prev.filter((s) => s.id !== id));
-            } catch (error) {
-              console.error("Error deleting sale:", error);
-            }
+      Alert.alert(
+        "Delete Sale",
+        "What would you like to do with this sale?",
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
           },
-        },
-        {
-          text: "Remove & Delete",
-          style: "default",
-          onPress: async () => {
-            try {
-              const saleTotal = (sale.rate || 0) * (sale.quantity || 0);
-              const shopRef = doc(db, "shops", shopId);
-              const shopSnap = await getDoc(shopRef);
-              if (shopSnap.exists()) {
-                const currentEarnings = shopSnap.data().totalEarnings || 0;
-                await updateDoc(shopRef, {
-                  totalEarnings: currentEarnings - saleTotal,
-                });
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                await deleteDoc(
+                  doc(db, "shops", shopId, "products", productId, "sales", id)
+                );
+                setSalesData((prev) => prev.filter((s) => s.id !== id));
+              } catch (error) {
+                logger.error("Error deleting sale:", error);
               }
-
-              await deleteDoc(
-                doc(db, "shops", shopId, "products", productId, "sales", id)
-              );
-              setSalesData((prev) => prev.filter((s) => s.id !== id));
-              fetchSales();
-            } catch (error) {
-              console.error("Error removing & deleting sale:", error);
-            }
+            },
           },
-        },
-      ],
-      { cancelable: true }
-    );
-  };
+          {
+            text: "Remove & Delete",
+            style: "default",
+            onPress: async () => {
+              try {
+                const saleTotal = (sale.rate || 0) * (sale.quantity || 0);
+                const shopRef = doc(db, "shops", shopId);
+                const shopSnap = await getDoc(shopRef);
+                if (shopSnap.exists()) {
+                  const currentEarnings = shopSnap.data().totalEarnings || 0;
+                  await updateDoc(shopRef, {
+                    totalEarnings: currentEarnings - saleTotal,
+                  });
+                }
 
-  const editSale = (item) => {
+                await deleteDoc(
+                  doc(db, "shops", shopId, "products", productId, "sales", id)
+                );
+                setSalesData((prev) => prev.filter((s) => s.id !== id));
+                fetchSales();
+              } catch (error) {
+                logger.error("Error removing & deleting sale:", error);
+              }
+            },
+          },
+        ],
+        { cancelable: true }
+      );
+    },
+    [shopId, productId, salesData]
+  );
+
+  const editSale = useCallback((item) => {
     setDate(new Date(item.date));
     setRate(item.rate);
     setQuantity(item.quantity);
     setEditId(item.id);
     setOldTotal(item.totalEarnings);
     setModalVisible(true);
-  };
+  }, []);
 
   const onChange = (event, selectedDate) => {
     if (selectedDate) {
@@ -262,20 +264,32 @@ export default function sales() {
     setShowDatePicker(false);
   };
 
-  useEffect(() => {
-    const nextData = salesData.slice(0, page * ITEMS_PER_PAGE);
-    setDisplayedData(nextData);
-  }, [salesData, page]);
+  const displayedData = useMemo(
+    () => salesData.slice(0, page * ITEMS_PER_PAGE),
+    [salesData, page]
+  );
 
-  const loadMoreData = () => {
+  const loadMoreData = useCallback(() => {
     if (loadingMore || displayedData.length >= salesData.length) return;
 
     setLoadingMore(true);
-    setTimeout(() => {
-      setPage((prevPage) => prevPage + 1); // Safe update
-      setLoadingMore(false);
-    }, 300); // Optional delay for smoother UX
-  };
+    setPage((prevPage) => prevPage + 1);
+    setLoadingMore(false);
+  }, [loadingMore, displayedData.length, salesData.length]);
+
+  const keyExtractor = useCallback((item) => item.id.toString(), []);
+
+  const renderSaleItem = useCallback(
+    ({ item, index }) => (
+      <SaleItem
+        item={item}
+        index={index}
+        onEdit={editSale}
+        onDelete={handleDeleteSale}
+      />
+    ),
+    [editSale, handleDeleteSale]
+  );
 
   return (
     <Animated.View
@@ -317,42 +331,13 @@ export default function sales() {
       </View>
 
       <Animated.FlatList
-        entering={SlideInDown.duration(1000)}
+        entering={SlideInDown.duration(500)}
         nestedScrollEnabled={true}
         data={displayedData}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item, index }) => (
-          <View
-            style={[
-              styles.tableRow,
-              index % 2 === 0 ? styles.evenRow : styles.oddRow,
-            ]}
-          >
-            <Text style={styles.tableCell}>
-              {new Date(item.date).toLocaleDateString()}
-            </Text>
-            <Text style={styles.tableCell}>Rs.{item.rate}</Text>
-            <Text style={styles.tableCell}>{item.quantity}</Text>
-            <Text style={styles.tableCell}>Rs{item.total}</Text>
-            <Text style={styles.tableCell}>
-              <View style={styles.actions}>
-                <TouchableOpacity onPress={() => editSale(item)}>
-                  <AntDesign name="edit" size={20} color="black" />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDeleteSale(item.id)}>
-                  <AntDesign
-                    name="delete"
-                    size={20}
-                    color="red"
-                    style={{ marginLeft: 10 }}
-                  />
-                </TouchableOpacity>
-              </View>
-            </Text>
-          </View>
-        )}
+        keyExtractor={keyExtractor}
+        renderItem={renderSaleItem}
         onEndReached={loadMoreData}
-        onEndReachedThreshold={0.5} // Load more when 10% from the bottom
+        onEndReachedThreshold={0.5}
         ListFooterComponent={
           loadingMore ? (
             <ActivityIndicator
@@ -371,7 +356,7 @@ export default function sales() {
         <AntDesign name="plus" size={24} color="white" />
       </TouchableOpacity>
 
-      <Modal visible={modalVisible} animationType="slide" transparent={true}>
+      <Modal visible={modalVisible} animationType="fade" transparent={true}>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <TouchableOpacity onPress={() => setModalVisible(false)}>
@@ -567,3 +552,34 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 });
+
+const SaleItem = memo(({ item, index, onEdit, onDelete }) => (
+  <View
+    style={[
+      styles.tableRow,
+      index % 2 === 0 ? styles.evenRow : styles.oddRow,
+    ]}
+  >
+    <Text style={styles.tableCell}>
+      {new Date(item.date).toLocaleDateString()}
+    </Text>
+    <Text style={styles.tableCell}>Rs.{item.rate}</Text>
+    <Text style={styles.tableCell}>{item.quantity}</Text>
+    <Text style={styles.tableCell}>Rs{item.total}</Text>
+    <Text style={styles.tableCell}>
+      <View style={styles.actions}>
+        <TouchableOpacity onPress={() => onEdit(item)}>
+          <AntDesign name="edit" size={20} color="black" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => onDelete(item.id)}>
+          <AntDesign
+            name="delete"
+            size={20}
+            color="red"
+            style={{ marginLeft: 10 }}
+          />
+        </TouchableOpacity>
+      </View>
+    </Text>
+  </View>
+));

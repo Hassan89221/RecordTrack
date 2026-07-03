@@ -117,7 +117,7 @@ export default function login() {
       {/* Header */}
       <Animated.View
         style={styles.headerSection}
-        entering={FadeInUp.duration(800)}
+        entering={FadeInUp.duration(500)}
       >
         <TouchableOpacity
           style={styles.backButton}
@@ -130,7 +130,7 @@ export default function login() {
         <View style={styles.logoContainer}>
           <Animated.View
             style={styles.logoIcon}
-            entering={BounceIn.delay(400).duration(1000)}
+            entering={BounceIn.delay(100).duration(500)}
           >
             <MaterialIcons name="analytics" size={32} color="white" />
           </Animated.View>
@@ -141,7 +141,7 @@ export default function login() {
       {/* Login Form */}
       <Animated.View
         style={styles.formContainer}
-        entering={SlideInDown.delay(600).duration(800)}
+        entering={SlideInDown.delay(130).duration(500)}
       >
         <View style={styles.formCard}>
           <Text style={styles.welcomeTitle}>Welcome Back!</Text>
@@ -150,7 +150,7 @@ export default function login() {
           {/* Email Input */}
           <Animated.View
             style={styles.inputGroup}
-            entering={SlideInRight.delay(800).duration(600)}
+            entering={SlideInRight.delay(160).duration(500)}
           >
             <Text style={styles.inputLabel}>Email Address</Text>
             <View style={styles.inputContainer}>
@@ -170,7 +170,7 @@ export default function login() {
           {/* Password Input */}
           <Animated.View
             style={styles.inputGroup}
-            entering={SlideInRight.delay(1000).duration(600)}
+            entering={SlideInRight.delay(200).duration(500)}
           >
             <Text style={styles.inputLabel}>Password</Text>
             <View style={styles.inputContainer}>
@@ -211,7 +211,7 @@ export default function login() {
           {/* Forgot Password */}
           <Animated.View
             style={styles.forgotContainer}
-            entering={FadeInUp.delay(1200).duration(600)}
+            entering={FadeInUp.delay(240).duration(500)}
           >
             <TouchableOpacity onPress={() => router.push(`/forgetpassword`)}>
               <Text style={styles.forgotText}>Forgot Password?</Text>
@@ -221,7 +221,7 @@ export default function login() {
           {/* Login Button */}
           <Animated.View
             style={styles.buttonContainer}
-            entering={BounceIn.delay(1400).duration(800)}
+            entering={BounceIn.delay(260).duration(500)}
           >
             <TouchableOpacity
               onPress={handleLogin}
@@ -246,7 +246,7 @@ export default function login() {
           {/* Sign Up Link */}
           <Animated.View
             style={styles.signupLinkContainer}
-            entering={FadeInUp.delay(1600).duration(600)}
+            entering={FadeInUp.delay(280).duration(500)}
           >
             <Text style={styles.signupText}>Don't have an account? </Text>
             <TouchableOpacity onPress={() => router.push(`/signup`)}>

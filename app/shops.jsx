@@ -10,7 +10,7 @@ import {
   RefreshControl,
 } from "react-native";
 import React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "expo-router";
 import { AntDesign, MaterialIcons, Ionicons } from "@expo/vector-icons";
 import Header from "./components/head";
@@ -18,12 +18,14 @@ import { db } from "../firebase.config";
 import {
   collection,
   addDoc,
+  onSnapshot,
   getDocs,
   deleteDoc,
   updateDoc,
   doc,
   query,
   where,
+  serverTimestamp,
 } from "firebase/firestore";
 import Animated, {
   SlideInRight,
@@ -34,6 +36,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Alert } from "react-native";
 import { auth } from "../firebase.config";
+import logger from "./lib/logger";
 
 export default function shops() {
   const router = useRouter();
@@ -48,11 +51,10 @@ export default function shops() {
   const [addingShop, setAddingShop] = useState(false);
   const [updatingShop, setUpdatingShop] = useState(false);
 
-  const fetchShops = async (showLoading = true) => {
-    if (showLoading) setLoading(true);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
     try {
       if (!auth.currentUser) return;
-
       const querySnapshot = await getDocs(
         query(
           collection(db, "shops"),
@@ -65,21 +67,43 @@ export default function shops() {
       }));
       setShops(shopList);
     } catch (error) {
-      console.error("Error fetching shops:", error);
-      Alert.alert("Error", "Failed to load shops. Please try again.");
+      logger.error("Error refreshing shops:", error);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchShops(false);
-  };
+  }, []);
 
   useEffect(() => {
-    fetchShops();
+    if (!auth.currentUser) {
+      setLoading(false);
+      return;
+    }
+
+    const q = query(
+      collection(db, "shops"),
+      where("userId", "==", auth.currentUser.uid)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const shopList = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setShops(shopList);
+        setLoading(false);
+        setRefreshing(false);
+      },
+      (error) => {
+        logger.error("Error in shops listener:", error);
+        Alert.alert("Error", "Failed to load shops. Please try again.");
+        setLoading(false);
+        setRefreshing(false);
+      }
+    );
+
+    return unsubscribe;
   }, []);
 
   const addShop = async (shopName) => {
@@ -93,18 +117,16 @@ export default function shops() {
       const docRef = await addDoc(collection(db, "shops"), {
         name: shopName,
         userId: auth.currentUser.uid,
-        createdAt: new Date(),
+        createdAt: serverTimestamp(),
       });
 
-      const newShopItem = { id: docRef.id, name: shopName };
-      setShops([...shops, newShopItem]);
       setNewShop("");
       setModalVisible(false);
 
       // Show success feedback
       Alert.alert("Success", "Shop added successfully!");
     } catch (error) {
-      console.error("Error adding shop:", error);
+      logger.error("Error adding shop:", error);
       Alert.alert("Error", "Failed to add shop. Please try again.");
     } finally {
       setAddingShop(false);
@@ -137,22 +159,13 @@ export default function shops() {
         updatedAt: new Date(),
       });
 
-      // Update local state
-      setShops(
-        shops.map((shop) =>
-          shop.id === editingShop.id
-            ? { ...shop, name: editShopName.trim() }
-            : shop
-        )
-      );
-
       setEditModalVisible(false);
       setEditingShop(null);
       setEditShopName("");
 
       Alert.alert("Success", "Shop updated successfully!");
     } catch (error) {
-      console.error("Error updating shop:", error);
+      logger.error("Error updating shop:", error);
       Alert.alert("Error", "Failed to update shop. Please try again.");
     } finally {
       setUpdatingShop(false);
@@ -174,9 +187,8 @@ export default function shops() {
           onPress: async () => {
             try {
               await deleteDoc(doc(db, "shops", shopId));
-              setShops(shops.filter((shop) => shop.id !== shopId));
             } catch (error) {
-              console.error("Error deleting shop:", error);
+              logger.error("Error deleting shop:", error);
             }
           },
         },
@@ -187,7 +199,7 @@ export default function shops() {
 
   const renderShopItem = ({ item, index }) => (
     <Animated.View
-      entering={FadeInUp.delay(index * 100).duration(600)}
+      entering={FadeInUp.delay(index * 60).duration(400)}
       style={[
         styles.shopItem,
         index % 2 === 0 ? styles.evenRow : styles.oddRow,
@@ -230,7 +242,7 @@ export default function shops() {
 
   const renderEmptyState = () => (
     <Animated.View
-      entering={FadeInUp.duration(800)}
+      entering={FadeInUp.duration(500)}
       style={styles.emptyContainer}
     >
       <Ionicons name="storefront-outline" size={80} color="#d1d5db" />
@@ -268,7 +280,7 @@ export default function shops() {
       <Header />
 
       <Animated.View
-        entering={SlideInDown.duration(700)}
+        entering={SlideInDown.duration(500)}
         style={styles.headerSection}
       >
         <Text style={styles.title}>My Shops</Text>
@@ -276,7 +288,7 @@ export default function shops() {
       </Animated.View>
 
       <Animated.FlatList
-        entering={SlideInDown.delay(200).duration(800)}
+        entering={SlideInDown.delay(130).duration(400)}
         data={shops}
         keyExtractor={(item) => item.id}
         renderItem={renderShopItem}
@@ -298,7 +310,7 @@ export default function shops() {
       {/* Floating Action Button */}
       {shops.length > 0 && (
         <Animated.View
-          entering={BounceIn.delay(600).duration(800)}
+          entering={BounceIn.delay(260).duration(400)}
           style={styles.fabContainer}
         >
           <TouchableOpacity
